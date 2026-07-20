@@ -157,6 +157,10 @@ _PEC_ZONE_POLYS = [
     [np.array(z, np.int32) for z in PEC_ZONE_2 if len(z) >= 3],
     [np.array(z, np.int32) for z in PEC_ZONE_3 if len(z) >= 3],
 ]
+# --- CLIENTS-IN-ZONE (occupancy) ---------------------------------------------
+# Per frame, count how many CLIENT boxes are standing in each PEC zone. A client
+# is "in" a zone when >= CLIENT_ZONE_FRAC of its BOX overlaps the zone.
+CLIENT_ZONE_FRAC = 0.5
 
 # --- zones (mark with a polygon picker; feet-in-polygon) ----------------------
 # MIRROR: drop reflected people. IGNORE: drop static false detections (e.g. a bag).
@@ -452,7 +456,8 @@ class UniformModel:
 # =============================================================
 #  Drawing  (no ids)
 # =============================================================
-def draw_frame(frame, persons, entry_count, pec_count=0, pec_zone_counts=(0, 0, 0)):
+def draw_frame(frame, persons, entry_count, pec_count=0, pec_zone_counts=(0, 0, 0),
+               client_zone_counts=(0, 0, 0)):
     SELLER_COLOR = (0, 0, 255)
     CLIENT_COLOR = (0, 200, 0)
     PEC_ZONE_COLORS = [(0, 165, 255), (255, 128, 0), (200, 0, 200)]  # Z1, Z2, Z3
@@ -479,13 +484,17 @@ def draw_frame(frame, persons, entry_count, pec_count=0, pec_zone_counts=(0, 0, 
     for zi, polys in enumerate(_PEC_ZONE_POLYS):                 # PEC zones 1/2/3
         for poly in polys:
             cv2.polylines(frame, [poly], True, PEC_ZONE_COLORS[zi], 2, cv2.LINE_AA)
-            cv2.putText(frame, f"PEC-Z{zi + 1}", tuple(poly[0]),
+            cv2.putText(frame, f"PEC-Z{zi + 1} (clients:{client_zone_counts[zi]})",
+                        tuple(poly[0]),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, PEC_ZONE_COLORS[zi], 2)
     cv2.putText(frame, f"Entries: {entry_count}  PEC: {pec_count}",
                 (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
     z1, z2, z3 = pec_zone_counts
     cv2.putText(frame, f"PEC  Z1:{z1}  Z2:{z2}  Z3:{z3}",
                 (30, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    c1, c2, c3 = client_zone_counts
+    cv2.putText(frame, f"Clients in zone  Z1:{c1}  Z2:{c2}  Z3:{c3}",
+                (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
     return frame
 
 
@@ -533,6 +542,9 @@ def main():
     pec_counted = False
     pec_durations = []
 
+    client_zone_counts = [0, 0, 0]             # CLIENTS currently in each PEC zone
+    client_zone_peak = [0, 0, 0]               # peak simultaneous clients per zone
+
     stats = {}
     last_persons = []
     processed_frame_idx = -1
@@ -542,7 +554,8 @@ def main():
     with sv.VideoSink(TARGET_VIDEO_PATH, video_info) as sink:
         for frame_idx, frame in enumerate(generator):
             if frame_idx % SKIP != 0:
-                draw_frame(frame, last_persons, entry_count, pec_count, pec_zone_counts)
+                draw_frame(frame, last_persons, entry_count, pec_count, pec_zone_counts,
+                           client_zone_counts)
                 sink.write_frame(frame)
                 continue
             if MAX_FRAMES and processed_frame_idx + 1 >= MAX_FRAMES:
@@ -747,8 +760,22 @@ def main():
                         pec_seen_secs = 0.0                         # reset cumulative contact timer
             # else: no seller visible -> pause the PEC
 
+            # 4c) CLIENTS-IN-ZONE: count CLIENT boxes standing in each PEC zone
+            # (>= CLIENT_ZONE_FRAC of the box overlaps). Live per-frame occupancy;
+            # also track the peak simultaneous count per zone for the report.
+            client_zone_counts = [0, 0, 0]
+            for bbox, role in persons:
+                if role != "CLIENT":
+                    continue
+                for zi, polys in enumerate(_PEC_ZONE_POLYS):
+                    if box_overlap_frac(bbox, polys) >= CLIENT_ZONE_FRAC:
+                        client_zone_counts[zi] += 1
+            for zi in range(3):
+                client_zone_peak[zi] = max(client_zone_peak[zi], client_zone_counts[zi])
+
             # 5) Draw + write
-            draw_frame(frame, persons, entry_count, pec_count, pec_zone_counts)
+            draw_frame(frame, persons, entry_count, pec_count, pec_zone_counts,
+                       client_zone_counts)
             sink.write_frame(frame)
             last_persons = persons
 
@@ -779,6 +806,8 @@ def main():
     print(f"PEC events       : {pec_count}")
     print(f"PEC per zone     : Z1={pec_zone_counts[0]}  Z2={pec_zone_counts[1]}  "
           f"Z3={pec_zone_counts[2]}  (sum={sum(pec_zone_counts)})")
+    print(f"Peak clients/zone: Z1={client_zone_peak[0]}  Z2={client_zone_peak[1]}  "
+          f"Z3={client_zone_peak[2]}")
     print(f"Avg interaction  : {avg_pec:.1f} s")
     print(f"Output video     : {TARGET_VIDEO_PATH}")
     if timed_frames > 0:
@@ -794,6 +823,10 @@ def main():
             "pec_per_zone": {"1": int(pec_zone_counts[0]),
                             "2": int(pec_zone_counts[1]),
                             "3": int(pec_zone_counts[2])
+        },
+            "counting_per_zone": {"zone 1": int(client_zone_peak[0]),
+                            "zone 2": int(client_zone_peak[1]),
+                            "zone 3": int(client_zone_peak[2])
         },
     }
     with open(OUTPUT_JSON_PATH, "w", encoding="utf-8") as f:
