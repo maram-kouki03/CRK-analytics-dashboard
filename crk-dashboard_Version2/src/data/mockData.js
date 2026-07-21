@@ -77,8 +77,93 @@ function rawDayStats(store, date) {
   // Données caisse (démo) : taux de transformation et panier moyen du jour
   const conv = Math.min(25, Math.max(3, vary(rng, p.conv, 0.15)));   // %
   const tickets = Math.round((clients * conv) / 100);
-  const panier = vary(rng, p.panier, 0.08);                          // DT
+  const panier = p.panier;                                           // DT (valeur de référence fixe fournie par CRK)
   return { clients, pec, taux, vendeurs, temps, conv, tickets, panier, rng };
+}
+
+// ---------- Statistiques par zone (pipeline vision SC.py, simulées) ----------
+// counting_per_zone : nombre de clients ayant visité la zone sur la journée (cumul)
+// pec_per_zone : prises en charge par zone
+// 3 zones (Z1, Z2, Z3) ; Z2 (îlots centraux) est la plus fréquentée par défaut.
+const ZONE_BASE_WEIGHTS = [0.32, 0.43, 0.25];
+
+export function getZoneStats(store, date) {
+  const day = rawDayStats(store, date);
+  const rng = day.rng;
+
+  // pondération du jour par zone, variée légèrement autour de la base
+  // (une zone reste dominante par magasin grâce à ZONE_BASE_WEIGHTS)
+  const weights = ZONE_BASE_WEIGHTS.map((w) => Math.max(0.05, vary(rng, w, 0.2)));
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+
+  // les 3 zones couvrent 60-80% des clients entrés du jour
+  // (tous les visiteurs ne s'arrêtent pas dans une zone : caisse directe, passage rapide, etc.)
+  const zonesClientsShare = 0.6 + rng() * 0.2;
+  const totalZonesClients = day.clients * zonesClientsShare;
+
+  // les 3 zones couvrent 85-95% du total des PEC du jour (reste : caisse, essayage, etc.)
+  const zonesPecShare = 0.85 + rng() * 0.1;
+  const totalZonesPec = day.pec * zonesPecShare;
+
+  let allocatedClients = 0;
+  let allocatedPec = 0;
+  return weights.map((w, i) => {
+    const share = w / weightSum;
+    const isLast = i === weights.length - 1;
+    const clients = isLast
+      ? Math.max(0, Math.round(totalZonesClients - allocatedClients))
+      : Math.max(0, Math.round(vary(rng, totalZonesClients * share, 0.15)));
+    if (!isLast) allocatedClients += clients;
+    const pec = isLast
+      ? Math.max(0, Math.round(totalZonesPec - allocatedPec))
+      : Math.max(0, Math.round(totalZonesPec * share));
+    if (!isLast) allocatedPec += pec;
+    return { id: i + 1, clients, pec };
+  });
+}
+
+// ---------- Export pour l'analyse par période ----------
+// Statistiques brutes (numériques) d'une seule journée.
+export function getDayRaw(store, date) {
+  const s = rawDayStats(store, date);
+  return {
+    clients: s.clients,
+    pec: s.pec,
+    tauxPec: s.taux,
+    vendeurs: s.vendeurs,
+    temps: s.temps,
+    tickets: s.tickets,
+    panier: s.panier,
+  };
+}
+
+// ---------- Export pour l'agent IA ----------
+// Statistiques brutes (nombres, pas de formatage) d'une semaine
+// se terminant à endDate : utilisé par agent/export_data.mjs
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export function getWeekRaw(store, endDate) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    d.setDate(d.getDate() - i);
+    const s = rawDayStats(store, d);
+    days.push({
+      date: iso(d),
+      jour: ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()],
+      clients: s.clients,
+      pec: s.pec,
+      tauxPec: Number(s.taux.toFixed(1)),
+      vendeurs: s.vendeurs,
+      tempsAvantPec: s.temps,
+      tickets: s.tickets,
+      panierMoyen: Number(s.panier.toFixed(0)),
+      tauxTransformation: Number(((s.tickets / s.clients) * 100).toFixed(1)),
+      potentiel: Math.round(s.panier * s.clients),
+      caEstime: Math.round(s.panier * s.tickets),
+    });
+  }
+  return days;
 }
 
 // ---------- Données complètes du dashboard ----------
@@ -174,82 +259,6 @@ export function getDashboardData(store, date) {
 }
 
 // ============================================================
-// Données brutes hebdomadaires (agent de rapports IA — agent/)
-// Renvoie les valeurs numériques brutes (pas de strings formatées)
-// sur 7 jours + la semaine précédente pour comparaison.
-// ============================================================
-
-const toISODate = (d) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-function dayRaw(store, date) {
-  const s = rawDayStats(store, date);
-  return {
-    date: toISODate(date),
-    clients: s.clients,
-    pec: s.pec,
-    tauxPec: Number(s.taux.toFixed(1)),
-    vendeursActifs: s.vendeurs,
-    tempsAvantPec: s.temps,
-    tickets: s.tickets,
-    panierMoyen: Number(s.panier.toFixed(2)),
-    tauxTransformation: Number(((s.tickets / s.clients) * 100).toFixed(1)),
-    potentiel: Math.round(s.panier * s.clients),
-  };
-}
-
-// 7 dates se terminant à endDate (inclus)
-function weekDates(endDate) {
-  const dates = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(endDate);
-    d.setDate(d.getDate() - i);
-    dates.push(d);
-  }
-  return dates;
-}
-
-// Agrège 7 jours bruts en totaux de semaine (moyennes pondérées quand pertinent)
-function weekTotaux(jours) {
-  const clients = jours.reduce((a, j) => a + j.clients, 0);
-  const pec = jours.reduce((a, j) => a + j.pec, 0);
-  const tickets = jours.reduce((a, j) => a + j.tickets, 0);
-  const potentiel = jours.reduce((a, j) => a + j.potentiel, 0);
-  const vendeursActifs = jours.reduce((a, j) => a + j.vendeursActifs, 0) / jours.length;
-  const tempsPondere = jours.reduce((a, j) => a + j.tempsAvantPec * j.pec, 0);
-  return {
-    clients,
-    pec,
-    tauxPec: Number(((pec / clients) * 100).toFixed(1)),
-    vendeursActifs: Number(vendeursActifs.toFixed(1)),
-    tempsAvantPec: Number((tempsPondere / pec).toFixed(1)),
-    tickets,
-    panierMoyen: Number((potentiel / clients).toFixed(2)),
-    tauxTransformation: Number(((tickets / clients) * 100).toFixed(1)),
-    potentiel: Math.round(potentiel),
-  };
-}
-
-export function getWeekRaw(store, endDate = new Date()) {
-  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-  const finPrecedente = new Date(end);
-  finPrecedente.setDate(finPrecedente.getDate() - 7);
-
-  const joursActuels = weekDates(end).map((d) => dayRaw(store, d));
-  const joursPrecedents = weekDates(finPrecedente).map((d) => dayRaw(store, d));
-
-  return {
-    magasin: store,
-    periodeActuelle: { debut: joursActuels[0].date, fin: joursActuels[6].date },
-    periodePrecedente: { debut: joursPrecedents[0].date, fin: joursPrecedents[6].date },
-    joursActuels,
-    joursPrecedents,
-    totauxActuels: weekTotaux(joursActuels),
-    totauxPrecedents: weekTotaux(joursPrecedents),
-  };
-}
-
-// ============================================================
 // Séries temporelles : taux de transformation & potentiel
 // period : "jour" (14 derniers jours) | "semaine" (8 semaines) | "mois" (6 mois)
 // ============================================================
@@ -328,53 +337,9 @@ export const heatmapHeures = HEURES;
 export const heatmapJours = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 
 // ============================================================
-// Page comparaison (7 derniers jours, tous magasins)
+// Page comparaison : couleurs de courbe par magasin
+// (les données agrégées sur la période viennent de rangeData.js)
 // ============================================================
-
-export const magasins = storeNames
-  .map((nom) => {
-    const p = profiles[nom];
-    const clients = Math.round(p.clients * 1.0);
-    const pec = Math.round((clients * p.taux) / 100);
-    return { nom, clients, pec, taux: p.taux, vendeurs: p.vendeurs, temps: p.temps };
-  })
-  .sort((a, b) => b.clients - a.clients)
-  .map((m, i) => ({ rang: i + 1, ...m }));
-
-// Meilleurs magasins (calculés automatiquement à partir du tableau)
-const bestBy = (arr, key, min = false) =>
-  [...arr].sort((a, b) => (min ? a[key] - b[key] : b[key] - a[key]))[0];
-
-const bTaux = bestBy(magasins, "taux");
-const bPec = bestBy(magasins, "pec");
-const bClients = bestBy(magasins, "clients");
-const bVendeurs = bestBy(magasins, "vendeurs");
-const bTemps = bestBy(magasins, "temps", true);
-
-export const bestCards = [
-  { label: "Meilleur taux PEC", store: bTaux.nom, value: fmtPct(bTaux.taux), icon: "trophy" },
-  { label: "Meilleur nombre de PEC", store: bPec.nom, value: fmtInt(bPec.pec), icon: "handshake" },
-  { label: "Meilleur nombre de clients", store: bClients.nom, value: fmtInt(bClients.clients), icon: "globe" },
-  { label: "Meilleur taux de vendeurs actifs", store: bVendeurs.nom, value: String(bVendeurs.vendeurs), icon: "users" },
-  { label: "Meilleur temps moyen avant PEC", store: bTemps.nom, value: `${bTemps.temps} s`, icon: "clock" },
-];
-
-export const conclusions = [
-  { icon: "trophy", label: "Meilleur taux PEC", detail: `${bTaux.nom} (${fmtPct(bTaux.taux)})` },
-  { icon: "handshake", label: "Meilleur nombre de PEC", detail: `${bPec.nom} (${fmtInt(bPec.pec)})` },
-  { icon: "globe", label: "Meilleur nombre de clients", detail: `${bClients.nom} (${fmtInt(bClients.clients)})` },
-  { icon: "clock", label: "Temps moyen avant PEC le plus bas", detail: `${bTemps.nom} (${bTemps.temps} s)` },
-];
-
-// Évolution hebdo multi-magasins (taux PEC %) — déterministe
-export const evolutionMultiMagasins = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((jour, i) => {
-  const row = { jour };
-  storeNames.forEach((nom) => {
-    const rng = mulberry32(hashString(`${nom}|hebdo|${i}`));
-    row[nom] = Number(Math.min(96, Math.max(60, profiles[nom].taux + (rng() * 2 - 1) * 3)).toFixed(1));
-  });
-  return row;
-});
 
 export const lineColors = {
   "Mall of Sousse": "#1e9e5a",
