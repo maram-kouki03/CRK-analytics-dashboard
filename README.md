@@ -4,10 +4,6 @@ Tableau de bord d'analyse des performances des points de vente **CRK Maroquinier
 La plateforme visualise les indicateurs issus de la pipeline de vision par ordinateur :
 clients entrés, prises en charge (PEC), taux PEC, vendeurs actifs et temps moyen avant PEC.
 
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
-![Recharts](https://img.shields.io/badge/Recharts-2-96402e)
-
 ---
 
 ## 📸 Aperçu
