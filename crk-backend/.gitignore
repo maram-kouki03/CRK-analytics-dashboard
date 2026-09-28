@@ -1,0 +1,12 @@
+# Secrets : CRK_API_KEY vit ici, ne jamais committer
+.env
+
+# Base SQLite locale (+ fichiers WAL)
+*.db
+*.db-wal
+*.db-shm
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/

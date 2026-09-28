@@ -1,0 +1,4199 @@
+openapi: 3.0.3
+info:
+  title: Joolan API
+  description: |
+    API REST pour la gestion des données Joolan (stocks, clients, tickets, produits, logistique, négoce B2B, etc.)
+    
+    ## Authentification
+    Toutes les requêtes nécessitent :
+    - `enseigne` : nom de l'enseigne (base de données)
+    - `api-key` : clé API avec les permissions appropriées
+    
+    ## Formats d'import
+    Les APIs d'import acceptent plusieurs formats dans le body :
+    - JSON (tableau d'objets)
+    - XLSX (fichier Excel)
+    - TSV (séparateur tabulation)
+    - CSV (séparateur point-virgule `;`)
+    
+    L'ordre des colonnes est libre, seuls les noms doivent correspondre.
+    
+    ## Permissions API
+    Chaque endpoint nécessite une permission spécifique, matérialisée par la colonne
+    `api_<permission>` de la table `api_keys` (ex. permission `stock` → colonne `api_stock`).
+
+    | Permission (`api_…`) | Endpoint(s) |
+    |---|---|
+    | `api_stock` | `/stock.do`, `/image-stocks.do`, `/image-full-stocks.do` |
+    | `api_recherche_clients` | `/recherche-clients.do` |
+    | `api_import_clients` | `/import-clients.do` |
+    | `api_export_tickets` | `/export-tickets.do` |
+    | `api_import_tickets` | `/import-tickets.do` |
+    | `api_annulation_tickets` | `/annulation-ticket.do` |
+    | `api_ticket_pdf` | `/ticket-pdf.do` |
+    | `api_compteurs_passages` | `/import-compteurs-passages.do` |
+    | `api_import_produits` | `/import-produits.do` |
+    | `api_import_tarifs` | `/import-tarifs.do` |
+    | `api_import_produits_associes` | `/import-produits-associes.do` |
+    | `api_import_champs_perso` | `/import-champs-perso.do` |
+    | `api_import_min_max` | `/import-min-max.do` |
+    | `api_import_fournisseurs` | `/import-fournisseurs.do` |
+    | `api_import_receptions` | `/import-receptions.do`, `/import-bl-fournisseur.do`, `/associer-receptions-commandes.do` |
+    | `api_import_scanners` | `/import-scanners.do` |
+    | `api_import_transferts` | `/import-transferts.do` |
+    | `api_import_commandes_fournisseurs` | `/import-commandes-fournisseurs.do` |
+    | `api_import_image_stock` | `/import-image-stock.do` |
+    | `api_envoyer_message` | `/envoyer-message.do` |
+    | `api_catalogue` | `/catalogue-web.do` |
+    | `api_logistique` | `/logistique.do` |
+    | `api_negoce` | `/negoce.do` |
+    | `api_planet_pii` | `/planet-pii.do` |
+    | `api_generation_rapports` | `/generation-rapports.do` |
+    | `api_query` | `/query.do` |
+    | *(aucune)* | `/ean-existe.do` (pas de contrôle de clé API) |
+  version: 2.0.0
+  contact:
+    name: Joolan
+    email: serge@joolan.com
+
+servers:
+  - url: https://{domain}/api/v2
+    variables:
+      domain:
+        default: www.example.com
+        description: Domaine de l'enseigne
+
+tags:
+  - name: Catalogue
+    description: Catalogue produits e-commerce
+  - name: Stock
+    description: Consultation des stocks
+  - name: Clients
+    description: Gestion des clients
+  - name: Tickets
+    description: Export et gestion des tickets
+  - name: Import Produits
+    description: Import de données produits
+  - name: Import Mouvements
+    description: Import de réceptions, transferts, etc.
+  - name: Import Divers
+    description: Autres imports
+  - name: Logistique
+    description: API logistique (réceptions, expéditions, tracking)
+  - name: Négoce B2B
+    description: Gestion des pièces commerciales B2B (devis, commandes, BL, factures)
+  - name: Tax-Free
+    description: Export données tax-free (Planet PII)
+  - name: Rapports
+    description: Génération de rapports PDF/HTML
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: query
+      name: api-key
+      description: Clé API avec permissions appropriées
+    enseigne:
+      type: apiKey
+      in: query
+      name: enseigne
+      description: Nom de l'enseigne
+
+  parameters:
+    enseigne:
+      name: enseigne
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Nom de l'enseigne
+    apiKey:
+      name: api-key
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Clé API
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          enum: [ok]
+        data:
+          type: object
+    
+    ErrorResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          enum: [ko]
+        error_message:
+          type: string
+
+    ImportResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          enum: [ok]
+        data:
+          type: object
+          properties:
+            imported:
+              type: integer
+              description: Nombre de lignes importées
+
+    AdresseLivraison:
+      type: object
+      properties:
+        Nom:
+          type: string
+        Adresse1:
+          type: string
+        Adresse2:
+          type: string
+        Adresse3:
+          type: string
+        Code_Postal:
+          type: string
+        Ville:
+          type: string
+        Pays:
+          type: string
+        Pays_Code3:
+          type: string
+        Pays_Code2:
+          type: string
+        Pays_Code_iso:
+          type: string
+        Contact:
+          type: string
+        Telephone:
+          type: string
+        email:
+          type: string
+
+    ProduitLogistique:
+      type: object
+      properties:
+        Ligne:
+          type: integer
+        SKU:
+          type: integer
+        EAN:
+          type: string
+        Reference_Fournisseur:
+          type: string
+        Produit:
+          type: string
+        Couleur:
+          type: string
+        Taille:
+          type: string
+        Quantite:
+          type: number
+
+    ProduitNegoce:
+      type: object
+      properties:
+        Produit:
+          type: string
+          description: Code produit
+        Couleur:
+          type: string
+        Taille:
+          type: string
+        Designation:
+          type: string
+        Quantite:
+          type: number
+        Prix_Vente:
+          type: number
+        Remise_Vente:
+          type: number
+        Commentaire:
+          type: string
+          description: Commentaire de ligne (alimente negoce_lignes.Commentaire)
+        Colis:
+          type: integer
+          default: 1
+        Numero_Serie:
+          type: string
+        Ligne_Commande:
+          type: integer
+        Ligne_BL:
+          type: integer
+
+paths:
+  # ==================== STOCK ====================
+  /stock.do:
+    get:
+      tags:
+        - Stock
+      summary: Consulter le stock d'un produit
+      description: Retourne les informations de stock pour un produit donné
+      operationId: getStock
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Produit
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Code produit
+          example: "TSHIRT-001"
+        - name: Couleur
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code couleur (optionnel)
+          example: "BLANC"
+        - name: Taille
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code taille (optionnel)
+          example: "M"
+        - name: Magasins
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Liste des magasins séparés par point-virgule
+          example: "PARIS;LYON"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Magasin:
+                          type: string
+                        Produit:
+                          type: string
+                        Couleur:
+                          type: string
+                        Taille:
+                          type: string
+                        En_Stock:
+                          type: number
+                        Disponible:
+                          type: number
+                        En_Reservation:
+                          type: number
+                        Sku:
+                          type: integer
+                        EAN:
+                          type: string
+              example:
+                result: ok
+                data:
+                  - Magasin: "PARIS"
+                    Produit: "TSHIRT-001"
+                    Couleur: "BLANC"
+                    Taille: "M"
+                    En_Stock: 25
+                    Disponible: 20
+                    En_Reservation: 5
+                    Sku: 12345
+                    EAN: "3760123456789"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /ean-existe.do:
+    get:
+      tags:
+        - Stock
+      summary: Vérifier si un EAN existe
+      description: |
+        Vérifie l'existence d'un code EAN dans la base et retourne les informations produit associées.
+
+        ⚠️ Cet endpoint n'effectue **aucun contrôle de clé API** (`check_api_key` n'est pas appelé).
+
+        La réponse est en **texte brut** (pas du JSON) :
+        - Si l'EAN existe : `OK` suivi de 8 lignes (séparateur `\n`) : EAN, `Produit Couleur Taille`, Désignation, Unité, Marque, Prix de vente formaté, Remise formatée.
+        - Si l'EAN n'existe pas : `KO` suivi de l'EAN demandé.
+
+        Si `enseigne` ou `ean` est absent, la requête se termine sans aucun contenu.
+      operationId: checkEan
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - name: ean
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Code EAN à vérifier
+          example: "3760123456789"
+      responses:
+        '200':
+          description: Réponse en texte brut (OK + détails produit, ou KO + EAN)
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                OK
+                3760123456789
+                TSHIRT-001 BLANC M
+                T-shirt coton
+                PIECE
+                MaMarque
+                19,90 €
+                0 %
+      security:
+        - enseigne: []
+
+  # ==================== CLIENTS ====================
+  /recherche-clients.do:
+    post:
+      tags:
+        - Clients
+      summary: Rechercher des clients
+      description: Recherche de clients par critères
+      operationId: searchClients
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Search:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      Field:
+                        type: string
+                        description: "Nom du champ (ex: Email, Mobile, Carte_Fidelite)"
+                      Value:
+                        type: string
+                        description: Valeur recherchée
+            example:
+              Search:
+                - Field: Email
+                  Value: client@example.com
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+              example:
+                result: ok
+                count: 1
+                data:
+                  - Client: 138
+                    Nom: "DUPONT"
+                    Prenom: "Jean"
+                    Email: "client@example.com"
+                    Mobile: "+33612345678"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-clients.do:
+    post:
+      tags:
+        - Clients
+      summary: Importer des clients
+      description: |
+        Import de fiches clients (création ou mise à jour sur clé unique).
+
+        **Permission requise :** `import_clients`
+
+        Formats acceptés : JSON, XLSX, TSV, CSV. L'ordre des colonnes est libre ;
+        seules les colonnes correspondant à un champ de la table `clients` sont importées.
+        - Colonne `Categorie` : alimente automatiquement la table `categories_clients`.
+        - Colonnes préfixées `perso_<nom>` : créées comme champs personnalisés (`liste_champs_perso` / `champs_perso`).
+      operationId: importClients
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  Client:
+                    type: integer
+                    description: Identifiant client (clé pour mise à jour)
+                  Nom:
+                    type: string
+                  Prenom:
+                    type: string
+                  email:
+                    type: string
+                  Mobile:
+                    type: string
+                  Adresse:
+                    type: string
+                  CodePostal:
+                    type: string
+                  Ville:
+                    type: string
+                  Carte_Fidelite:
+                    type: string
+                  Categorie:
+                    type: string
+                    description: Catégorie client (créée si inexistante)
+            example:
+              - Nom: "DUPONT"
+                Prenom: "Jean"
+                email: "jean.dupont@example.com"
+                Mobile: "+33612345678"
+                Ville: "PARIS"
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+              description: Fichier XLSX
+      responses:
+        '200':
+          description: Import réussi — liste des clients créés ou modifiés
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Client:
+                          type: integer
+                        Nom:
+                          type: string
+                        Prenom:
+                          type: string
+                        email:
+                          type: string
+                        Carte_Fidelite:
+                          type: string
+              example:
+                result: ok
+                data:
+                  - Client: 138
+                    Nom: "DUPONT"
+                    Prenom: "Jean"
+                    email: "jean.dupont@example.com"
+                    Carte_Fidelite: ""
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== TICKETS ====================
+  /export-tickets.do:
+    get:
+      tags:
+        - Tickets
+      summary: Exporter les tickets d'une journée
+      description: Retourne les entêtes, lignes et règlements des tickets d'une date donnée
+      operationId: exportTickets
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Date au format AAAA-MM-JJ
+          example: "2026-01-15"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: object
+                    properties:
+                      entetes:
+                        type: array
+                        items:
+                          type: object
+                      lignes:
+                        type: array
+                        items:
+                          type: object
+                      reglements:
+                        type: array
+                        items:
+                          type: object
+              example:
+                result: ok
+                data:
+                  entetes:
+                    - Entete: 12345
+                      Magasin: "PARIS"
+                      Date: "2026-01-15"
+                      Nature: "VENTE"
+                      Total_TTC: 149.90
+                  lignes:
+                    - Entete: 12345
+                      Produit: "TSHIRT-001"
+                      Couleur: "BLANC"
+                      Taille: "M"
+                      Quantite: 2
+                      Prix_Vente: 49.90
+                  reglements:
+                    - Entete: 12345
+                      Mode: "CB"
+                      Montant: 149.90
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /annulation-ticket.do:
+    post:
+      tags:
+        - Tickets
+      summary: Annuler un ticket
+      description: Annule un ticket existant en indiquant son numéro d'entête et un motif d'annulation
+      operationId: cancelTicket
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Entete
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Numéro d'entête du ticket à annuler
+          example: 12345
+        - name: Motif
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Motif de l'annulation
+          example: "Erreur de saisie"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "Motif parameter missing"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /ticket-pdf.do:
+    get:
+      tags:
+        - Tickets
+      summary: Générer le PDF d'un ticket
+      description: |
+        Retourne le ticket au format PDF, encodé en base64 dans la réponse JSON
+        (champ `pdf_content`). Le format de rendu est choisi via le paramètre `format`.
+      operationId: getTicketPdf
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Entete
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Numéro d'entête du ticket
+          example: 12345
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [receipt, A4]
+          description: "Format de rendu du PDF : receipt (ticket de caisse) ou A4"
+          example: "receipt"
+      responses:
+        '200':
+          description: Succès, PDF encodé en base64
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  pdf_content:
+                    type: string
+                    format: byte
+                    description: Contenu du fichier PDF encodé en base64
+              example:
+                result: ok
+                pdf_content: "JVBERi0xLjQKJeLjz9MK...=="
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "document not found or download error"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-tickets.do:
+    post:
+      tags:
+        - Tickets
+      summary: Importer des tickets de caisse
+      description: |
+        Importe une liste de tickets (ventes, avoirs, acomptes, réservations, devis, proformas, commandes, BL...).
+        Le corps est un **tableau JSON** d'entêtes ; chaque entête contient ses `Lignes` et `Reglements`.
+        La réponse renvoie, pour chaque entête, la correspondance entre l'`ID` fourni et le numéro d'`Entete` créé.
+      operationId: importTickets
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Magasins_Stocks
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Liste de magasins (séparés par des virgules) sur lesquels puiser le stock.
+            Si renseigné et que la vente présente des produits manquants, des demandes de
+            transfert inter-magasins sont générées automatiquement.
+          example: "'PARIS','OPERA'"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  ID:
+                    type: string
+                  Date:
+                    type: string
+                    format: date
+                  Heure:
+                    type: string
+                  Magasin:
+                    type: string
+                  Caisse:
+                    type: integer
+                  Nature:
+                    type: string
+                    enum: [VENTE, AVOIR, ACOMPTE, RESERVATION, DEVIS, PROFORMA, COMMANDE, BL, "AJUSTEMENT STOCK"]
+                  Client:
+                    type: integer
+                  Vendeur:
+                    type: string
+                  Utilisateur:
+                    type: string
+                  Pays_Code3:
+                    type: string
+                  Observation:
+                    type: string
+                  Date_Livraison:
+                    type: string
+                    format: date
+                  Adresse_Livraison:
+                    type: object
+                    properties:
+                      Intitule_Adresse:
+                        type: string
+                      Nom:
+                        type: string
+                      Adresse1:
+                        type: string
+                      Adresse2:
+                        type: string
+                      Adresse3:
+                        type: string
+                      Code_Postal:
+                        type: string
+                      Ville:
+                        type: string
+                      Pays:
+                        type: string
+                      Contact:
+                        type: string
+                      Telephone:
+                        type: string
+                      email:
+                        type: string
+                  Lignes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Produit:
+                          type: string
+                        Produit_if_not_exists:
+                          type: string
+                        Couleur:
+                          type: string
+                        Taille:
+                          type: string
+                        Designation:
+                          type: string
+                        Quantite:
+                          type: number
+                        Prix_Normal:
+                          type: number
+                        Prix_Vente:
+                          type: number
+                        Remise_Vente:
+                          type: number
+                        Motif:
+                          type: string
+                        Numero_Serie:
+                          type: string
+                        Taux_TVA:
+                          type: number
+                  Reglements:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Montant:
+                          type: number
+                        ModeReg:
+                          type: string
+                        Libelle:
+                          type: string
+                        Echeance:
+                          type: string
+                          format: date
+                        EnteteLiee:
+                          type: integer
+                        Reference:
+                          type: string
+            example:
+              - Magasin: "OPERA"
+                Caisse: 1
+                Nature: "VENTE"
+                Vendeur: "SERGE"
+                Lignes:
+                  - Produit: "ANGELA"
+                    Couleur: "BLEU"
+                    Taille: "S"
+                    Designation: "Chemise Angela Coton"
+                    Quantite: 1
+                    Prix_Vente: 175
+                    Taux_TVA: 0
+                Reglements:
+                  - Montant: 175
+                    ModeReg: "300"
+                    Libelle: "CARTE BANCAIRE"
+                    Reference: "transaction CB 1234"
+      responses:
+        '200':
+          description: |
+            Résultat de l'import. `result` vaut `ok` si tous les tickets ont été créés,
+            `ko` si au moins une entête est en erreur. `data` liste la correspondance
+            ID → Entete (ou ID → Erreur) pour chaque ticket.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok, ko]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ID:
+                          type: string
+                        Entete:
+                          type: integer
+                        Erreur:
+                          type: string
+              example:
+                result: ok
+                data:
+                  - ID: "CMD-001"
+                    Entete: 12345
+        '400':
+          description: Erreur globale (clé API, JSON invalide, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "bad json"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== COMPTEURS ====================
+  /import-compteurs-passages.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Importer des compteurs de passages
+      description: |
+        Import des données de compteurs de passages en magasin.
+
+        **Permission requise :** `compteurs_passages`
+
+        Formats acceptés : JSON, XLSX, TSV, CSV
+
+        L'ordre des colonnes est libre. Le champ `Magasin` est obligatoire (doit exister
+        dans la table `magasins`). Les lignes sans `Magasin` sont ignorées.
+      operationId: importCompteursPassages
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Magasin
+                properties:
+                  Magasin:
+                    type: string
+                    maxLength: 30
+                    description: Code magasin (doit exister)
+                  Date:
+                    type: string
+                    description: "Date AAAA-MM-JJ ou JJ/MM/AAAA (défaut = aujourd'hui)"
+                  Heure:
+                    type: string
+                    description: "Heure HH:MM:SS (défaut = 00:00:00)"
+                  Compteur:
+                    type: integer
+                    description: Numéro du compteur (défaut = 0)
+                  Entrees:
+                    type: integer
+                    description: Nombre d'entrées (défaut = 0)
+                  Sorties:
+                    type: integer
+                    description: Nombre de sorties (défaut = 0)
+            example:
+              - Magasin: PARIS
+                Date: "2026-01-26"
+                Heure: "10:00:00"
+                Compteur: 1
+                Entrees: 150
+                Sorties: 120
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+              description: Fichier XLSX
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResponse'
+              example:
+                result: ok
+                data:
+                  imported: 2
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                magasin_absent:
+                  value:
+                    result: ko
+                    error_message: champ Magasin absent
+                magasin_inexistant:
+                  value:
+                    result: ko
+                    error_message: "1 ligne(s) avec Magasin inexistant (INCONNU)"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== IMPORT PRODUITS ====================
+  /import-produits.do:
+    post:
+      tags:
+        - Import Produits
+      summary: Importer des produits
+      description: |
+        Import de produits avec leurs déclinaisons (couleurs, tailles).
+
+        **Permission requise :** `import_produits`
+
+        Formats de corps acceptés : JSON (tableau d'objets), XLSX, TSV, CSV (séparateur `;`).
+        Le séparateur de champs et de lignes est détecté automatiquement.
+
+        Colonnes obligatoires : `Produit`, `Couleur`, `Taille`.
+
+        Les autres colonnes sont mappées automatiquement sur les colonnes des tables
+        `produits`, `skus`, `produits_couleurs`, `produits_tva_pays` et `tarifsproduits`
+        (ex. `Designation`, `EAN`, `Reference_Fournisseur`, `Rayon`, `Famille`, `SousFamille`,
+        `Marque`, `Fournisseur`, `Saison`, `Saison_Gestion`, `Cle_MEP`, `Force_Produit`,
+        `Prix_Achat`, `Remise_Achat`, `Prix_Vente`, `Remise_Vente`, `Taux_TVA_Vente`,
+        `Taux_TVA_Achat`, `Conditionnement_Achat`, `Conditionnement_Vente`, `Devise`, `Tarif`...).
+        Les valeurs décimales acceptent la virgule.
+
+        Champs personnalisés : préfixer la colonne par `Perso_` (produits),
+        `PersoCouleur_` (produits_couleurs) ou `PersoSku_` (skus).
+      operationId: importProduits
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: reset_tarif
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Si présent, supprime les tarifsproduits existants des tarifs présents
+            dans le fichier (produits non préfixés par `$`) avant réimport.
+          example: "1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Produit
+                  - Couleur
+                  - Taille
+                properties:
+                  Produit:
+                    type: string
+                    maxLength: 30
+                  Designation:
+                    type: string
+                    maxLength: 70
+                  Couleur:
+                    type: string
+                    maxLength: 30
+                  Taille:
+                    type: string
+                    maxLength: 30
+                  EAN:
+                    type: string
+                    maxLength: 30
+                  Rayon:
+                    type: string
+                  Famille:
+                    type: string
+                  SousFamille:
+                    type: string
+                  Marque:
+                    type: string
+                  Fournisseur:
+                    type: string
+                  Prix_Achat:
+                    type: number
+                  Prix_Vente:
+                    type: number
+                  Taux_TVA_Vente:
+                    type: number
+                  Tarif:
+                    type: string
+            example:
+              - Produit: "TSHIRT-001"
+                Designation: "T-shirt coton"
+                Couleur: "BLANC"
+                Taille: "M"
+                EAN: "3760123456789"
+                Rayon: "TEXTILE"
+                Famille: "HAUTS"
+                Marque: "MARQUE1"
+                Prix_Achat: 15.00
+                Prix_Vente: 49.90
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV (séparateur `;`) avec ligne d'en-têtes
+            example: |
+              Produit	Designation	Couleur	Taille	EAN	Prix_Vente
+              TSHIRT-001	T-shirt coton	BLANC	M	3760123456789	49.90
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "Colonne Produit non trouvée"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-tarifs.do:
+    post:
+      tags:
+        - Import Produits
+      summary: Importer des tarifs
+      description: |
+        Import de prix de vente par tarif / produit (table `tarifsproduits`).
+
+        **Permission requise :** `import_tarifs`
+
+        Formats de corps acceptés : JSON (tableau d'objets), XLSX, TSV, CSV (séparateur `;`).
+
+        Colonnes : `Tarif` et `Produit` servent de clés ; `Couleur` et `Taille`
+        sont prises en compte si présentes. Les autres colonnes ne sont importées
+        que si elles correspondent à une colonne de la table `tarifsproduits`
+        (ex. `Prix_Vente`, `Remise_Vente`, `Motif`). Les décimales acceptent la virgule.
+
+        Une ligne avec `Prix_Vente = -1` supprime le tarif correspondant.
+        Le tarif est créé automatiquement s'il n'existe pas.
+      operationId: importTarifs
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Tarif
+                  - Produit
+                properties:
+                  Tarif:
+                    type: string
+                  Produit:
+                    type: string
+                  Couleur:
+                    type: string
+                  Taille:
+                    type: string
+                  Prix_Vente:
+                    type: number
+                  Remise_Vente:
+                    type: number
+                  Motif:
+                    type: string
+            example:
+              - Tarif: "STANDARD"
+                Produit: "TSHIRT-001"
+                Couleur: "BLANC"
+                Taille: "M"
+                Prix_Vente: 49.90
+                Remise_Vente: 0
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV (séparateur `;`) avec ligne d'en-têtes
+            example: |
+              Tarif	Produit	Couleur	Taille	Prix_Vente	Remise_Vente
+              STANDARD	TSHIRT-001	BLANC	M	49.90	0
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== IMPORT MOUVEMENTS ====================
+  /import-receptions.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer des réceptions fournisseurs
+      description: |
+        Import de réceptions de marchandises (table `mouvements_lignes`).
+
+        **Permission requise :** `import_receptions`
+
+        Formats acceptés : JSON, XLSX, TSV, CSV.
+
+        Option `creation_produits=1` (ou `creation-produits`) pour créer automatiquement
+        les produits inexistants via l'API import-produits ; dans ce cas des colonnes
+        produit supplémentaires sont acceptées (Designation, Marque, Collection, Saison,
+        Matiere, Rayon, Famille, SousFamille, Cle_MEP, Modele, Descriptif, Tags, Unite,
+        EAN, Tarif, Prix_Vente, Remise_Vente, Motif).
+        Les produits peuvent aussi être identifiés par leur code EAN.
+      operationId: importReceptions
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: creation_produits
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+          description: "Créer les produits inexistants (0 ou 1). Alias : creation-produits"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Fournisseur
+                  - Date
+                  - Reference
+                  - Produit
+                  - Magasin
+                  - Nature
+                  - Quantite
+                  - Prix_Achat
+                properties:
+                  Fournisseur:
+                    type: string
+                    description: Doit exister dans la table fournisseurs
+                  Date:
+                    type: string
+                    description: "Date AAAA-MM-JJ ou JJ/MM/AAAA"
+                  Reference:
+                    type: string
+                    description: Référence du bon de réception
+                  Nature:
+                    type: string
+                    enum: [Réception, Livraison]
+                  Magasin:
+                    type: string
+                    description: Doit exister dans la table magasins
+                  Produit:
+                    type: string
+                  Couleur:
+                    type: string
+                  Taille:
+                    type: string
+                  Quantite:
+                    type: number
+                  Prix_Achat:
+                    type: number
+                  Remise_Achat:
+                    type: number
+                    description: Optionnel (défaut = 0)
+                  Devise:
+                    type: string
+                    description: Optionnel (défaut = devise du dossier)
+                  Taux_Devise:
+                    type: number
+                    description: Optionnel (résolu depuis la table devises si 0)
+                  Commande:
+                    type: integer
+                    description: Optionnel
+                  Colis:
+                    type: string
+                    description: Optionnel
+            example:
+              - Fournisseur: "FOURNISSEUR1"
+                Date: "2026-02-15"
+                Reference: "BL-001"
+                Nature: "Réception"
+                Magasin: "DEPOT"
+                Produit: "TSHIRT-001"
+                Couleur: "BLANC"
+                Taille: "M"
+                Quantite: 100
+                Prix_Achat: 15.00
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+              description: Fichier XLSX
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                champ_absent:
+                  value:
+                    result: ko
+                    error_message: "champ Date absent"
+                champ_non_renseigne:
+                  value:
+                    result: ko
+                    error_message: "2 ligne(s) avec Prix_Achat non renseigné"
+                produit_inconnu:
+                  value:
+                    result: ko
+                    error_message: "1 produits inconnus (TSHIRT-001 BLANC M)"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /associer-receptions-commandes.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Associer a posteriori les réceptions aux commandes fournisseurs
+      description: |
+        Rattache les lignes de réception non encore associées à une commande
+        (`mouvements_lignes.Commande = 0`, de nature `Réception` ou `Livraison`)
+        aux lignes de commandes fournisseurs **validées**, en respectant le
+        fournisseur, le magasin et l'article (produit/couleur/taille).
+
+        **Permission requise :** `import_receptions`
+
+        Règles de calcul :
+        - reste à livrer d'une ligne de commande = `Quantite - Quantite_Livree`
+          moins les livraisons déjà associées et en attente (`Nature='Livraison'`) ;
+        - allocation gloutonne plafonnée à `min(quantité de la ligne de réception, reste à livrer)` ;
+        - si une ligne de réception dépasse le reste à livrer d'une commande, elle est
+          **éclatée** : la ligne d'origine est ramenée à la quantité allouée et de
+          nouvelles lignes sont créées pour les parts suivantes et l'éventuel reliquat
+          (laissé sans commande).
+
+        Deux modes :
+        - **prévisualisation** (défaut) : renvoie les propositions sans rien modifier ;
+        - **application** (`valider=1`) : exécute les associations (transaction) et renvoie un résumé.
+
+        Aucun corps de requête : tous les paramètres sont passés en query string.
+      operationId: associerReceptionsCommandes
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: valider
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+          description: "1 = appliquer les associations ; 0 ou absent = prévisualisation seule"
+        - name: fournisseur
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Filtre optionnel sur le fournisseur (recherche partielle, LIKE)"
+        - name: magasin
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Filtre optionnel sur le magasin (recherche partielle, LIKE)"
+        - name: ordre
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ancienne, recente]
+            default: ancienne
+          description: |
+            Ordre d'allocation quand plusieurs commandes éligibles peuvent recevoir une
+            même ligne de réception : `ancienne` (la plus ancienne d'abord, défaut) ou
+            `recente` (la plus récente d'abord).
+        - name: id_mouvement
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: |
+            Filtre optionnel sur une réception précise (`mouvements.id_mouvement`) : seules
+            les lignes de ce mouvement sont traitées. Le mouvement doit être de nature
+            `Réception` ou `Livraison`, sinon une erreur est renvoyée.
+      responses:
+        '200':
+          description: |
+            Succès. En prévisualisation, renvoie la liste des propositions. En application
+            (`valider=1`), renvoie un résumé des associations effectuées.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Réponse en prévisualisation
+                    properties:
+                      nb_lignes:
+                        type: integer
+                        description: Nombre de lignes de réception qui seront associées
+                      nb_rattachements:
+                        type: integer
+                        description: Nombre total de rattachements (une ligne peut être éclatée sur plusieurs commandes)
+                      propositions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            Mouvement:
+                              type: integer
+                              description: Clé de la ligne de réception (mouvements_lignes.Mouvement)
+                            Date:
+                              type: string
+                              description: Date de la réception (AAAA-MM-JJ)
+                            Reference:
+                              type: string
+                            Magasin:
+                              type: string
+                            Fournisseur:
+                              type: string
+                            Produit:
+                              type: string
+                            Couleur:
+                              type: string
+                            Taille:
+                              type: string
+                            Nature:
+                              type: string
+                              enum: [Réception, Livraison]
+                            Quantite_Ligne:
+                              type: number
+                              description: Quantité totale de la ligne de réception
+                            Reliquat:
+                              type: number
+                              description: Part de la ligne laissée sans commande (si éclatement)
+                            Associations:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  Commande:
+                                    type: integer
+                                  Numero_Commande:
+                                    type: string
+                                  Date_Commande:
+                                    type: string
+                                  Quantite:
+                                    type: number
+                                    description: Quantité allouée à cette commande
+                  - type: object
+                    description: Réponse en application (valider=1)
+                    properties:
+                      result:
+                        type: string
+                        example: ok
+                      nb_lignes:
+                        type: integer
+                      nb_rattachements:
+                        type: integer
+              examples:
+                previsualisation:
+                  summary: Prévisualisation (valider absent)
+                  value:
+                    nb_lignes: 1
+                    nb_rattachements: 2
+                    propositions:
+                      - Mouvement: 4521
+                        Date: "2026-02-15"
+                        Reference: "BL-001"
+                        Magasin: "DEPOT"
+                        Fournisseur: "FOURNISSEUR1"
+                        Produit: "TSHIRT-001"
+                        Couleur: "BLANC"
+                        Taille: "M"
+                        Nature: "Réception"
+                        Quantite_Ligne: 100
+                        Reliquat: 0
+                        Associations:
+                          - Commande: 312
+                            Numero_Commande: "CF-000312"
+                            Date_Commande: "2026-01-20"
+                            Quantite: 60
+                          - Commande: 318
+                            Numero_Commande: "CF-000318"
+                            Date_Commande: "2026-02-02"
+                            Quantite: 40
+                application:
+                  summary: Application (valider=1)
+                  value:
+                    result: ok
+                    nb_lignes: 1
+                    nb_rattachements: 2
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                non_autorise:
+                  value:
+                    result: ko
+                    error_message: "not authorized"
+                enseigne_inconnue:
+                  value:
+                    result: ko
+                    error_message: "unknown database"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-scanners.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer le contenu d'un scanner
+      description: |
+        Import du contenu d'un scanner dans la table `scans` (avec `ScannerID=0`).
+
+        **Permission requise :** `import_scanners`
+
+        Formats acceptés : JSON, TSV, CSV. Noms de colonnes insensibles à la casse,
+        ordre libre ; toute colonne autre que celles ci-dessous (hormis `Zone`) est ignorée.
+
+        Le body doit comporter au moins 4 colonnes, incluant obligatoirement
+        `Produit`, `Couleur`, `Taille`, `Quantite`.
+
+        **Zone** : si le body contient une colonne `Zone`, sa valeur est utilisée ligne par
+        ligne ; sinon le paramètre `zone` est appliqué ; si les deux sont vides, la zone prend
+        la date et l'heure du jour au format `JJ/MM/AAAA HH:MM`.
+
+        **Contrôles (tout ou rien)** : l'existence de chaque (Produit, Couleur, Taille) est
+        vérifiée dans la table `skus`, la quantité doit être numérique ; la moindre erreur
+        annule la totalité de l'import.
+
+        Les quantités sont **cumulées** (`Quantite = Quantite + valeur importée`) sur une clé
+        (ScannerID, Magasin, Produit, Couleur, Taille, Zone) déjà existante.
+      operationId: importScanners
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: magasin
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Magasin appliqué à toutes les lignes (facultatif)"
+        - name: zone
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Zone par défaut si absente du body (facultatif). Défaut : date/heure du jour JJ/MM/AAAA HH:MM"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Produit
+                  - Couleur
+                  - Taille
+                  - Quantite
+                properties:
+                  Produit:
+                    type: string
+                    description: Doit exister (combinaison Produit/Couleur/Taille) dans la table skus
+                  Couleur:
+                    type: string
+                  Taille:
+                    type: string
+                  Quantite:
+                    type: number
+                  Zone:
+                    type: string
+                    description: Optionnel ; prioritaire sur le paramètre zone
+            example:
+              - Produit: "TSHIRT-001"
+                Couleur: "BLANC"
+                Taille: "M"
+                Quantite: 12
+                Zone: "ALLEE-A"
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes (1ère ligne)
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                colonne_absente:
+                  value:
+                    result: ko
+                    error_message: "champ Quantite absent"
+                quantite_invalide:
+                  value:
+                    result: ko
+                    error_message: "2 ligne(s) avec une quantité invalide (abc)"
+                sku_inconnu:
+                  value:
+                    result: ko
+                    error_message: "1 produit(s)/couleur(s)/taille(s) inexistant(s) dans skus (TSHIRT-001 BLANC M)"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-transferts.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer des transferts inter-magasins
+      description: |
+        Import de mouvements de transfert entre magasins.
+        Chaque transfert crée une demande d'expédition depuis le magasin expéditeur vers le magasin destinataire.
+        L'option `reception_immediate` permet de valider automatiquement la réception côté destinataire.
+      operationId: importTransferts
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - demande
+                  - Magasin_Expediteur
+                  - Magasin_Destinataire
+                  - Lignes
+                properties:
+                  demande:
+                    type: string
+                    enum: [transfert]
+                    description: Type de demande (doit être "transfert")
+                    example: "transfert"
+                  reception_immediate:
+                    type: integer
+                    enum: [0, 1]
+                    default: 0
+                    description: "1 = réception automatique côté destinataire, 0 = transfert en attente"
+                  ID:
+                    type: string
+                    description: Identifiant externe pour le suivi (retourné dans la réponse)
+                  Date:
+                    type: string
+                    format: date
+                    description: Date du transfert (défaut = date du jour)
+                    example: "2026-02-18"
+                  Heure:
+                    type: string
+                    description: Heure du transfert (défaut = heure courante)
+                    example: "14:30:00"
+                  Magasin_Expediteur:
+                    type: string
+                    description: Code du magasin expéditeur
+                    example: "DEPOT"
+                  Magasin_Destinataire:
+                    type: string
+                    description: Code du magasin destinataire
+                    example: "PARIS01"
+                  Caisse:
+                    type: integer
+                    default: 1
+                    description: Numéro de caisse
+                  Utilisateur:
+                    type: string
+                    default: "API"
+                    description: Utilisateur qui effectue le transfert
+                  Lignes:
+                    type: array
+                    description: Lignes de produits à transférer
+                    items:
+                      type: object
+                      required:
+                        - Produit
+                        - Quantite
+                      properties:
+                        Produit:
+                          type: string
+                          description: Code produit
+                        Couleur:
+                          type: string
+                          description: Code couleur
+                        Taille:
+                          type: string
+                          description: Code taille
+                        Designation:
+                          type: string
+                          description: Désignation (optionnel, récupéré du produit si vide)
+                        Quantite:
+                          type: number
+                          description: Quantité à transférer (doit être > 0)
+                          example: 5
+                        Prix_Normal:
+                          type: number
+                          description: Prix normal (optionnel)
+                        Prix_Vente:
+                          type: number
+                          description: Prix de vente (optionnel)
+                        Remise_Vente:
+                          type: number
+                          description: Remise en % (optionnel)
+                        Motif:
+                          type: string
+                          description: Motif du transfert
+                        Numero_Serie:
+                          type: string
+                          description: Numéro de série (si applicable)
+            example:
+              - demande: "transfert"
+                reception_immediate: 1
+                ID: "TRF-001"
+                Date: "2026-02-18"
+                Magasin_Expediteur: "DEPOT"
+                Magasin_Destinataire: "PARIS01"
+                Lignes:
+                  - Produit: "TSHIRT-001"
+                    Couleur: "BLANC"
+                    Taille: "M"
+                    Quantite: 10
+                  - Produit: "TSHIRT-001"
+                    Couleur: "NOIR"
+                    Taille: "L"
+                    Quantite: 5
+      responses:
+        '200':
+          description: Résultat de l'import
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok, ko]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ID:
+                          type: string
+                          description: Identifiant externe fourni
+                        Entete:
+                          type: integer
+                          description: Numéro d'entête créé (si succès)
+                        Erreur:
+                          type: string
+                          description: Message d'erreur (si échec)
+              examples:
+                success:
+                  summary: Import réussi
+                  value:
+                    result: "ok"
+                    data:
+                      - ID: "TRF-001"
+                        Entete: 12345
+                error:
+                  summary: Import avec erreur
+                  value:
+                    result: "ko"
+                    data:
+                      - ID: "TRF-001"
+                        Erreur: "Le magasin expéditeur n'existe pas"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== IMPORT DIVERS ====================
+  /import-fournisseurs.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Importer des fournisseurs
+      description: |
+        Import de fiches fournisseurs (création ou mise à jour sur clé unique).
+
+        **Permission requise :** `import_fournisseurs`
+
+        Formats acceptés : JSON, XLSX, TSV, CSV. L'ordre des colonnes est libre ;
+        chaque colonne de l'en-tête doit correspondre à un champ de la table `fournisseurs`.
+      operationId: importFournisseurs
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  Fournisseur:
+                    type: string
+                    maxLength: 30
+                  Contact:
+                    type: string
+                  Telephone:
+                    type: string
+                  Email:
+                    type: string
+                  Adresse:
+                    type: string
+                  CodePostal:
+                    type: string
+                  Ville:
+                    type: string
+                  Pays:
+                    type: string
+            example:
+              - Fournisseur: "FOURNISSEUR1"
+                Contact: "Jean Dupont"
+                Email: "contact@fournisseur1.com"
+                Telephone: "+33123456789"
+                Ville: "LYON"
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+              description: Fichier XLSX
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-min-max.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Importer des min/max de stock
+      description: |
+        Import des seuils min/max pour le réassort (table `produits_min_max`).
+
+        **Permission requise :** `import_min_max`
+
+        Formats de corps acceptés : JSON (tableau d'objets), XLSX, TSV, CSV (séparateur `;`).
+
+        Clés : `Profil_Stock`, `Produit` ; `Couleur` et `Taille` sont prises en compte
+        si présentes. Les autres colonnes (ex. `Mini`, `Maxi`) sont insérées dans
+        `produits_min_max`. Le profil de stock est créé automatiquement s'il n'existe pas.
+      operationId: importMinMax
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Profil_Stock
+                  - Produit
+                properties:
+                  Profil_Stock:
+                    type: string
+                  Produit:
+                    type: string
+                  Couleur:
+                    type: string
+                  Taille:
+                    type: string
+                  Mini:
+                    type: integer
+                  Maxi:
+                    type: integer
+            example:
+              - Profil_Stock: "STANDARD"
+                Produit: "TSHIRT-001"
+                Couleur: "BLANC"
+                Taille: "M"
+                Mini: 5
+                Maxi: 20
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV (séparateur `;`) avec en-têtes
+            example: |
+              Profil_Stock	Produit	Couleur	Taille	Mini	Maxi
+              STANDARD	TSHIRT-001	BLANC	M	5	20
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-champs-perso.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Importer des champs personnalisés
+      description: |
+        Import de valeurs pour les champs personnalisés (table `champs_perso`).
+
+        **Permission requise :** `import_champs_perso`
+
+        Formats de corps acceptés : JSON (tableau d'objets), XLSX, TSV, CSV (séparateur `;`).
+
+        Colonnes obligatoires : `Nature`, `Nom`, `Clef`, `Valeur`.
+        Le type de champ perso est créé automatiquement dans `liste_champs_perso` s'il n'existe pas.
+        Une `Valeur` vide supprime la valeur existante pour cette `Nature`/`Nom`/`Clef`.
+      operationId: importChampsPerso
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Nature
+                  - Nom
+                  - Clef
+                  - Valeur
+                properties:
+                  Nature:
+                    type: string
+                    description: "Nature de l'objet (ex. produits, produits_couleurs, skus)"
+                  Nom:
+                    type: string
+                  Clef:
+                    type: string
+                  Valeur:
+                    type: string
+            example:
+              - Nature: "produits"
+                Nom: "Poids_Net"
+                Clef: "TSHIRT-001"
+                Valeur: "200g"
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV (séparateur `;`) avec en-têtes
+            example: |
+              Nature	Nom	Clef	Valeur
+              produits	Poids_Net	TSHIRT-001	200g
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                champ_manquant:
+                  value:
+                    result: ko
+                    error_message: "Champ Valeur manquant"
+                permission:
+                  value:
+                    result: ko
+                    error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /envoyer-message.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Envoyer un message inter-magasins
+      description: |
+        Envoie un message interne d'un magasin expéditeur vers un magasin destinataire.
+        Tous les paramètres sont passés en query string.
+      operationId: sendMessage
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: magasin-expediteur
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Code du magasin expéditeur
+          example: "OPERA"
+        - name: magasin-destinataire
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Code du magasin destinataire
+          example: "PARIS"
+        - name: utilisateur-expediteur
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Identifiant de l'utilisateur expéditeur
+          example: "ESHOP"
+        - name: message
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Contenu du message
+          example: "Veuillez expédier le transfert 123 à PARIS svp"
+      responses:
+        '200':
+          description: Message envoyé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "magasin-destinataire not found"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /query.do:
+    post:
+      tags:
+        - Import Divers
+      summary: Exécuter une requête SQL
+      description: |
+        Exécute une requête SQL en lecture seule.
+        
+        ⚠️ Requiert la permission `api_query`.
+      operationId: executeQuery
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Requête SQL SELECT
+            example: "SELECT Produit, Designation FROM produits LIMIT 5"
+      responses:
+        '200':
+          description: Résultat de la requête
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+              example:
+                result: ok
+                data:
+                  - Produit: "TSHIRT-001"
+                    Designation: "T-shirt coton"
+                  - Produit: "CHEMISE01"
+                    Designation: "Chemise lin"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== CATALOGUE ====================
+  /catalogue-web.do:
+    get:
+      tags:
+        - Catalogue
+      summary: Catalogue produits e-commerce
+      description: |
+        Retourne le catalogue des produits e-commerce (`eCommerce=1`) : SKU, EAN,
+        désignation, prix, photos (URL CDN absolue), etc.
+
+        **Permission requise :** `catalogue`
+
+        Permet de filtrer par date de dernière modification (`last-call`, sur `Last_Change`),
+        par magasin (`Magasin`, détermine le tarif appliqué) et par produit (`Produit`).
+        Sans `Magasin`, le tarif vide (`''`) est utilisé.
+      operationId: getCatalogueWeb
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: output-format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [tsv, csv, json]
+          description: Format de sortie
+          example: "json"
+        - name: last-call
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: >
+            Date de dernière synchronisation ; seuls les produits dont `Last_Change`
+            est postérieur sont retournés. Défaut 1900-01-01 00:00:00.
+          example: "2026-01-01 00:00:00"
+        - name: Magasin
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code magasin (détermine le tarif applicable)
+          example: "PARIS"
+        - name: Produit
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtrer sur un produit spécifique
+          example: "TSHIRT-001"
+      responses:
+        '200':
+          description: Catalogue produits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    Sku:
+                      type: integer
+                    EAN:
+                      type: string
+                    Reference_Fournisseur:
+                      type: string
+                    Produit:
+                      type: string
+                    Couleur:
+                      type: string
+                    Taille:
+                      type: string
+                    Designation:
+                      type: string
+                    Saison:
+                      type: string
+                    Rayon:
+                      type: string
+                    Famille:
+                      type: string
+                    SousFamille:
+                      type: string
+                    Marque:
+                      type: string
+                    Collection:
+                      type: string
+                    Modele:
+                      type: string
+                    Matiere:
+                      type: string
+                    Decimales_Quantite:
+                      type: integer
+                    Conditionnement_Achat:
+                      type: number
+                    Conditionnement_Vente:
+                      type: number
+                    Date_Creation:
+                      type: string
+                    Date_Modification:
+                      type: string
+                    Descriptif:
+                      type: string
+                    Serialise:
+                      type: integer
+                    Lien_Externe:
+                      type: string
+                    Actif:
+                      type: integer
+                    Fournisseur:
+                      type: string
+                    Exclure_Fidelite:
+                      type: integer
+                    Cle_mep:
+                      type: string
+                    Tags:
+                      type: string
+                    Emplacement:
+                      type: string
+                    Unite:
+                      type: string
+                    Last_Change:
+                      type: string
+                    Type_Produit:
+                      type: string
+                    Code_Douanes:
+                      type: string
+                    Poids:
+                      type: number
+                    Volume:
+                      type: number
+                    Pays_Production:
+                      type: string
+                    Prix_Vente:
+                      type: number
+                    Remise_Vente:
+                      type: number
+                    Motif:
+                      type: string
+                    Photo1:
+                      type: string
+                    Photo2:
+                      type: string
+                    Photo3:
+                      type: string
+                    Photo4:
+                      type: string
+                    Photo5:
+                      type: string
+                    Photo6:
+                      type: string
+                    Photo7:
+                      type: string
+                    Photo8:
+                      type: string
+                    Force_Produit:
+                      type: string
+                    Saison_Gestion:
+                      type: string
+              example:
+                - Sku: 12345
+                  EAN: "3760123456789"
+                  Produit: "TSHIRT-001"
+                  Couleur: "BLANC"
+                  Taille: "M"
+                  Designation: "T-shirt coton bio"
+                  Prix_Vente: 49.90
+                  Remise_Vente: 0
+                  Photo1: "https://cdn.example.com/photos/TSHIRT-001-BLANC-1.jpg"
+                  Photo2: ""
+                  Marque: "MARQUE1"
+                  Rayon: "TEXTILE"
+                  Famille: "HAUTS"
+                  SousFamille: "T-SHIRTS"
+                  Saison: "PE2026"
+                  Poids: 0.2
+                  Actif: 1
+            text/tsv:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_format:
+                  value:
+                    result: ko
+                    error_message: "missing output-format"
+                invalid_format:
+                  value:
+                    result: ko
+                    error_message: "invalid output-format"
+                magasin_not_found:
+                  value:
+                    result: ko
+                    error_message: "Magasin not found"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== STOCK (suite) ====================
+  /image-full-stocks.do:
+    get:
+      tags:
+        - Stock
+      summary: Image complète des stocks
+      description: |
+        Retourne l'image complète des stocks : tous les SKUs × tous les magasins, y compris les stocks à 0.
+
+        **Permission requise :** `stock`
+      operationId: getImageFullStocks
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Magasins
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Liste des magasins séparés par point-virgule (tous si vide)
+          example: "PARIS;LYON"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Magasin:
+                          type: string
+                        Produit:
+                          type: string
+                        Couleur:
+                          type: string
+                        Taille:
+                          type: string
+                        Reliquat_Fournisseur:
+                          type: number
+                        En_Livraison:
+                          type: number
+                        En_Stock:
+                          type: number
+                        En_Preparation:
+                          type: number
+                        Disponible:
+                          type: number
+                        Attribue:
+                          type: number
+                        En_Reservation:
+                          type: number
+                        En_BL:
+                          type: number
+                        Sku:
+                          type: integer
+                        EAN:
+                          type: string
+                        Reference_Fournisseur:
+                          type: string
+              example:
+                result: ok
+                data:
+                  - Magasin: "PARIS"
+                    Produit: "TSHIRT-001"
+                    Couleur: "BLANC"
+                    Taille: "M"
+                    Reliquat_Fournisseur: 0
+                    En_Livraison: 0
+                    En_Stock: 25
+                    En_Preparation: 0
+                    Disponible: 25
+                    Attribue: 0
+                    En_Reservation: 0
+                    En_BL: 0
+                    Sku: 12345
+                    EAN: "3760123456789"
+                    Reference_Fournisseur: "REF-001"
+                  - Magasin: "PARIS"
+                    Produit: "TSHIRT-001"
+                    Couleur: "NOIR"
+                    Taille: "M"
+                    Reliquat_Fournisseur: 0
+                    En_Livraison: 0
+                    En_Stock: 0
+                    En_Preparation: 0
+                    Disponible: 0
+                    Attribue: 0
+                    En_Reservation: 0
+                    En_BL: 0
+                    Sku: 12346
+                    EAN: "3760123456790"
+                    Reference_Fournisseur: "REF-002"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /image-stocks.do:
+    get:
+      tags:
+        - Stock
+      summary: Image des stocks non nuls
+      description: |
+        Retourne les stocks non nuls uniquement (au moins un champ de stock différent de 0).
+
+        **Permission requise :** `stock`
+      operationId: getImageStocks
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Magasins
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Liste des magasins séparés par point-virgule (tous si vide)
+          example: "PARIS;LYON"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Magasin:
+                          type: string
+                        Produit:
+                          type: string
+                        Couleur:
+                          type: string
+                        Taille:
+                          type: string
+                        Reliquat_Fournisseur:
+                          type: number
+                        En_Livraison:
+                          type: number
+                        En_Stock:
+                          type: number
+                        En_Preparation:
+                          type: number
+                        Disponible:
+                          type: number
+                        Attribue:
+                          type: number
+                        En_Reservation:
+                          type: number
+                        En_BL:
+                          type: number
+                        Sku:
+                          type: integer
+                        EAN:
+                          type: string
+                        Reference_Fournisseur:
+                          type: string
+              example:
+                result: ok
+                data:
+                  - Magasin: "PARIS"
+                    Produit: "TSHIRT-001"
+                    Couleur: "BLANC"
+                    Taille: "M"
+                    Reliquat_Fournisseur: 0
+                    En_Livraison: 10
+                    En_Stock: 25
+                    En_Preparation: 2
+                    Disponible: 23
+                    Attribue: 0
+                    En_Reservation: 3
+                    En_BL: 0
+                    Sku: 12345
+                    EAN: "3760123456789"
+                    Reference_Fournisseur: "REF-001"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                result: ko
+                error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== IMPORT MOUVEMENTS (suite) ====================
+  /import-bl-fournisseur.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer un bon de livraison fournisseur
+      description: |
+        Import d'un bon de livraison fournisseur lié à une commande existante.
+
+        **Permission requise :** `import_receptions`
+
+        Le body contient les lignes du BL au format TSV ou CSV.
+        Les produits peuvent être identifiés par code produit, EAN ou SKU.
+
+        Colonnes requises : Date, Numero_Bon_Livraison, Colis, Reference_Colis, Magasin, Produit, Couleur, Taille, Quantite
+      operationId: importBlFournisseur
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Fournisseur
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Code fournisseur
+          example: "FOURNISSEUR1"
+        - name: Commande
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Numéro de commande fournisseur
+          example: "12345"
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+            example: |
+              Date	Numero_Bon_Livraison	Colis	Reference_Colis	Magasin	Produit	Couleur	Taille	Quantite
+              15/02/2026	BL-001	1	COL-001	DEPOT	TSHIRT-001	BLANC	M	50
+              15/02/2026	BL-001	1	COL-001	DEPOT	TSHIRT-001	BLANC	L	30
+              15/02/2026	BL-001	2	COL-002	DEPOT	TSHIRT-001	NOIR	M	40
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fournisseur_missing:
+                  value:
+                    result: ko
+                    error_message: "Fournisseur not found"
+                commande_missing:
+                  value:
+                    result: ko
+                    error_message: "Commande not found"
+                champ_manquant:
+                  value:
+                    result: ko
+                    error_message: "Champ Colis manquant"
+                produit_inexistant:
+                  value:
+                    result: ko
+                    error_message: "2 ligne(s) avec Produit inexistant (INCONNU1, INCONNU2)"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-commandes-fournisseurs.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer des commandes fournisseurs
+      description: |
+        Import de commandes fournisseurs avec création automatique des commandes et ventilation par magasin.
+
+        **Permission requise :** `import_commandes_fournisseurs`
+
+        Le body contient les lignes au format TSV ou CSV (JSON et XLSX également acceptés).
+        L'option `creation-produits` (alias `creation_produits`) permet de créer
+        automatiquement les produits inexistants via l'API import-produits.
+
+        Colonnes requises : Fournisseur, Date, Numero_Commande, Magasin, Produit, Couleur, Taille, Quantite, Prix_Achat, Remise_Achat, Devise
+        Colonnes optionnelles : Statut (valeurs : En saisie, Validée, Annulée, Soldée ; défaut "En saisie"), Date_Livraison
+      operationId: importCommandesFournisseurs
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: creation-produits
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Si présent, crée automatiquement les produits inexistants. Alias : creation_produits"
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+            example: |
+              Fournisseur	Date	Numero_Commande	Magasin	Produit	Couleur	Taille	Quantite	Prix_Achat	Remise_Achat	Devise	Statut	Date_Livraison
+              FOURNISSEUR1	15/02/2026	CMD-001	PARIS	TSHIRT-001	BLANC	M	100	15.00	0	EUR	En saisie	01/03/2026
+              FOURNISSEUR1	15/02/2026	CMD-001	PARIS	TSHIRT-001	NOIR	M	50	15.00	5	EUR	En saisie	01/03/2026
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                champ_manquant:
+                  value:
+                    result: ko
+                    error_message: "Champ Devise manquant"
+                produit_inexistant:
+                  value:
+                    result: ko
+                    error_message: "Produits inexistants : INCONNU BLEU M, INCONNU ROUGE S"
+                magasin_inexistant:
+                  value:
+                    result: ko
+                    error_message: "1 ligne(s) avec Magasin inexistant (INCONNU)"
+                statut_invalide:
+                  value:
+                    result: ko
+                    error_message: "Statut non valide : Brouillon"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  /import-image-stock.do:
+    post:
+      tags:
+        - Import Mouvements
+      summary: Importer une image de stock
+      description: |
+        Import d'une image de stock complète. Le système calcule la différence entre le stock actuel et le stock déclaré, puis génère des ajustements de stock automatiques (via import-tickets).
+
+        **Permissions requises :** `import_image_stock` + `import_tickets`
+
+        Colonnes requises : Magasin, Produit, Couleur, Taille, Stock
+      operationId: importImageStock
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV avec en-têtes
+            example: |
+              Magasin	Produit	Couleur	Taille	Stock
+              PARIS	TSHIRT-001	BLANC	M	25
+              PARIS	TSHIRT-001	BLANC	L	18
+              PARIS	TSHIRT-001	NOIR	M	12
+      responses:
+        '200':
+          description: Import réussi — ajustements de stock générés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: OK
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                champ_manquant:
+                  value:
+                    result: ko
+                    error_message: "Champ Stock manquant"
+                permission:
+                  value:
+                    result: ko
+                    error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== IMPORT PRODUITS (suite) ====================
+  /import-produits-associes.do:
+    post:
+      tags:
+        - Import Produits
+      summary: Importer des produits associés
+      description: |
+        Import d'associations entre produits (ventes croisées, suggestions, etc.)
+
+        **Permission requise :** `import_produits_associes`
+
+        Formats de corps acceptés : JSON (tableau d'objets), XLSX, TSV, CSV (séparateur `;`).
+
+        Les produits peuvent être identifiés par code produit, EAN ou SKU.
+
+        Colonnes requises : `Produit`, `Couleur`, `Produit_Associe`, `Couleur_Associee`.
+      operationId: importProduitsAssocies
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - Produit
+                  - Couleur
+                  - Produit_Associe
+                  - Couleur_Associee
+                properties:
+                  Produit:
+                    type: string
+                  Couleur:
+                    type: string
+                  Produit_Associe:
+                    type: string
+                  Couleur_Associee:
+                    type: string
+            example:
+              - Produit: "TSHIRT-001"
+                Couleur: "BLANC"
+                Produit_Associe: "JEAN-001"
+                Couleur_Associee: "BLEU"
+          text/plain:
+            schema:
+              type: string
+              description: Données TSV ou CSV (séparateur `;`) avec en-têtes
+            example: |
+              Produit	Couleur	Produit_Associe	Couleur_Associee
+              TSHIRT-001	BLANC	JEAN-001	BLEU
+              TSHIRT-001	NOIR	JEAN-001	NOIR
+              CHEMISE-001	BLANC	CRAVATE-001	ROUGE
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import réussi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                result: ok
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                champ_manquant:
+                  value:
+                    result: ko
+                    error_message: "Champ Produit_Associe manquant"
+                permission:
+                  value:
+                    result: ko
+                    error_message: "invalid api key"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== LOGISTIQUE ====================
+  /logistique.do:
+    get:
+      tags:
+        - Logistique
+      summary: API Logistique (GET)
+      description: |
+        API logistique pour la gestion des flux avec un entrepôt externe.
+        
+        **Permission requise :** `api_logistique`
+        
+        Actions disponibles en GET :
+        - `catalogue` : Récupérer le catalogue produits
+        - `attentes_receptions` : Récupérer les réceptions en attente
+        - `demandes_expeditions` : Récupérer les demandes d'expédition
+      operationId: logistiqueGet
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [catalogue, attentes_receptions, demandes_expeditions]
+          description: Action à exécuter
+        - name: Magasin
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code magasin/dépôt (requis pour attentes_receptions, demandes_expeditions)
+        - name: tarif
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code tarif (requis pour catalogue)
+        - name: last_change
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Date de dernière modification (requis pour catalogue)
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: array
+                    items:
+                      type: object
+              examples:
+                catalogue:
+                  summary: Catalogue produits
+                  value:
+                    result: ok
+                    data:
+                      - SKU: 12345
+                        Produit: "CHEMISE01"
+                        Couleur: "BLEU"
+                        Taille: "M"
+                        Designation: "Chemise coton"
+                        EAN: "3760123456789"
+                        Prix_Vente: 49.90
+                        Emplacement: "A-12-3"
+                attentes_receptions:
+                  summary: Attentes de réceptions
+                  value:
+                    result: ok
+                    data:
+                      - Type: "Livraison fournisseur"
+                        ID_Mouvement: 123
+                        Date: "2026-01-27"
+                        Fournisseur: "FOURNISSEUR1"
+                        Reference: "BL-001"
+                        Magasin: "DEPOT"
+                        Produits:
+                          - Ligne: 1
+                            SKU: 12345
+                            EAN: "3760123456789"
+                            Produit: "CHEMISE01"
+                            Couleur: "BLEU"
+                            Taille: "M"
+                            Quantite: 100
+                demandes_expeditions:
+                  summary: Demandes d'expédition
+                  value:
+                    result: ok
+                    data:
+                      - Type: "Demande expédition"
+                        ID: "DE456"
+                        Date: "2026-01-27"
+                        Numero_Piece: "BL-2026-001"
+                        Client: "138"
+                        Transporteur: "CHRONOPOST"
+                        Adresse_Livraison:
+                          Nom: "Client SARL"
+                          Adresse1: "12 rue de Paris"
+                          Code_Postal: "75001"
+                          Ville: "PARIS"
+                        Produits:
+                          - Ligne: 1
+                            SKU: 12345
+                            Produit: "CHEMISE01"
+                            Quantite: 5
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - apiKey: []
+          enseigne: []
+
+    post:
+      tags:
+        - Logistique
+      summary: API Logistique (POST)
+      description: |
+        API logistique pour les confirmations et mises à jour.
+        
+        **Permission requise :** `api_logistique`
+        
+        Actions disponibles :
+        - `confirmation_reception_transfert` : Confirmer réception d'un transfert entrant
+        - `confirmations_expeditions` : Confirmer des expéditions
+        - `confirmation_reception_fournisseur` : Confirmer réception fournisseur
+        - `get_envoi_logistique_receptions` / `set_envoi_logistique_receptions` : Statut envoi
+        - `get_statut_entetes` / `set_statut_entetes` : Statuts entêtes
+        - `get_statut_traitement_entetes` / `set_statut_traitement_entetes` : Statuts traitement
+        - `get_tracking_number` / `set_tracking_number` : Numéros de suivi
+        - `get_tracking_number_negoce` / `set_tracking_number_negoce` : Numéros de suivi B2B
+      operationId: logistiquePost
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - confirmation_reception_transfert
+              - confirmations_expeditions
+              - confirmation_reception_fournisseur
+              - get_envoi_logistique_receptions
+              - set_envoi_logistique_receptions
+              - get_statut_entetes
+              - set_statut_entetes
+              - get_statut_traitement_entetes
+              - set_statut_traitement_entetes
+              - get_tracking_number
+              - set_tracking_number
+              - get_tracking_number_negoce
+              - set_tracking_number_negoce
+          description: Action à exécuter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - title: confirmation_reception_transfert
+                  type: object
+                  properties:
+                    Entete:
+                      type: integer
+                      description: Numéro d'entête du transfert
+                    Magasin:
+                      type: string
+                      description: Code magasin réceptionnaire
+                    Caisse:
+                      type: integer
+                      default: 1
+                    date_reception:
+                      type: string
+                      format: date
+                    heure_reception:
+                      type: string
+                      format: time
+                    accepter_difference:
+                      type: integer
+                      enum: [0, 1]
+                      description: Accepter les différences (0=non, 1=oui)
+                    Produits:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          Produit:
+                            type: string
+                          Couleur:
+                            type: string
+                          Taille:
+                            type: string
+                          Quantite:
+                            type: number
+                - title: confirmations_expeditions
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      Preparation:
+                        type: integer
+                        description: Numéro de préparation
+                      date_preparation:
+                        type: string
+                        format: date
+                      heure_preparation:
+                        type: string
+                        format: time
+                      Produits:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            Produit:
+                              type: string
+                            Couleur:
+                              type: string
+                            Taille:
+                              type: string
+                            Quantite:
+                              type: number
+                            Colis:
+                              type: integer
+                - title: confirmation_reception_fournisseur
+                  type: object
+                  properties:
+                    id_mouvement:
+                      type: integer
+                      description: ID du mouvement (attente de réception)
+                    date_reception:
+                      type: string
+                      format: date
+                    Fournisseur:
+                      type: string
+                    Magasin:
+                      type: string
+                    Reference:
+                      type: string
+                    Devise:
+                      type: string
+                    Taux_Devise:
+                      type: number
+                    Produits:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          EAN:
+                            type: string
+                          Produit:
+                            type: string
+                          Couleur:
+                            type: string
+                          Taille:
+                            type: string
+                          Quantite:
+                            type: number
+                          Commande:
+                            type: integer
+                          Prix_Achat_Devise:
+                            type: number
+                          Remise_Achat:
+                            type: number
+                          Colis:
+                            type: string
+                - title: tracking_number
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      Entete:
+                        type: integer
+                      Colis:
+                        type: integer
+                      Tracking_Number:
+                        type: string
+            examples:
+              confirmation_reception_transfert:
+                summary: Confirmer réception transfert
+                value:
+                  Entete: 12345
+                  Magasin: "MAGASIN1"
+                  Caisse: 1
+                  date_reception: "2026-01-27"
+                  heure_reception: "14:30:00"
+                  accepter_difference: 1
+                  Produits:
+                    - Produit: "CHEMISE01"
+                      Couleur: "BLEU"
+                      Taille: "M"
+                      Quantite: 10
+              confirmations_expeditions:
+                summary: Confirmer expéditions
+                value:
+                  - Preparation: 456
+                    date_preparation: "2026-01-27"
+                    heure_preparation: "10:00:00"
+                    Produits:
+                      - Produit: "CHEMISE01"
+                        Couleur: "BLEU"
+                        Taille: "M"
+                        Quantite: 5
+                        Colis: 1
+              set_tracking_number:
+                summary: Définir numéros de suivi
+                value:
+                  - Entete: 12345
+                    Colis: 1
+                    Tracking_Number: "1Z999AA10123456784"
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== NÉGOCE B2B ====================
+  /negoce.do:
+    post:
+      tags:
+        - Négoce B2B
+      summary: API Négoce B2B
+      description: |
+        API pour la gestion des pièces commerciales B2B (devis, commandes, BL, factures),
+        des clients négoce et des relances.
+
+        **Permission requise :** `api_negoce`
+
+        Actions disponibles (paramètre `action`, insensible à la casse) :
+        - `creer_piece` : Créer une pièce commerciale complète (crée un panier, ajoute les lignes, valide)
+        - `creer_panier` : Créer un panier (entête seule). Les champs non fournis sont hérités de la fiche client puis du paramétrage dossier négoce
+        - `ajouter_lignes_panier` : Ajouter des lignes à un panier existant. Les lignes sans `Prix_Vente` sont valorisées au tarif du panier (remise la plus avantageuse entre le tarif et la remise habituelle du client)
+        - `valider_panier` : Valider un panier existant
+
+        `creer_panier` + `ajouter_lignes_panier` + `valider_panier` = le détail, en 3 appels, de ce que `creer_piece` fait en un seul.
+        Cette voie permet de constituer un panier progressivement et de le valoriser (consulter `total_ht_panier`) avant de le transformer en pièce.
+        - `url_piece` : Récupérer l'URL d'une pièce à partir de son Entete
+        - `email_piece` : Envoyer une pièce par email à partir de son Numero_Piece
+        - `liste_pieces_a_envoyer` : Lister les pièces qui seraient envoyées par `envoyer_pieces` (aucun email envoyé, aucune modification)
+        - `envoyer_pieces` : Envoyer en masse par email les pièces sélectionnées par le filtre (équivalent API de l'écran « Édition des pièces »). Mode `simulation=1` : identique à `liste_pieces_a_envoyer`
+        - `creation_client` : Créer un client négoce (enrichissement Pappers si Siret fourni)
+        - `relance_client` : Envoyer un email de relance (niveaux 1/2/3) sur le solde débiteur
+        - `facturation_affilies` : Facturer les clients affiliés (`affilie=1`) entre 2 dates — agrège les ventes/avoirs magasin par magasin et crée une FACTURE (ou AVOIR) par magasin, puis marque les tickets `Statut=900`. Mode `simulation=1` : ne crée/marque rien, retourne uniquement ce qui serait fait
+
+        **Types de pièces (Nature) :**
+        - `DEVIS`, `PROFORMA`, `RESERVATION`, `COMMANDE`, `BL`, `TRANSFERT`, `FACTURE`
+      operationId: negoceApi
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [creer_piece, creer_panier, ajouter_lignes_panier, valider_panier, url_piece, email_piece, liste_pieces_a_envoyer, envoyer_pieces, creation_client, relance_client, facturation_affilies]
+          description: Action à exécuter (insensible à la casse)
+        - name: Enseigne
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Code enseigne (positionné dans Vars pour le traitement)
+      requestBody:
+        required: true
+        description: Corps JSON brut (RequestContent), parsé selon l'action.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - title: creer_piece
+                  type: object
+                  required:
+                    - Client
+                    - Nature
+                    - Magasin
+                  properties:
+                    Client:
+                      type: integer
+                      description: ID du client négoce
+                    Nature:
+                      type: string
+                      enum: [DEVIS, PROFORMA, RESERVATION, COMMANDE, BL, TRANSFERT, FACTURE]
+                      description: Type de pièce
+                    Magasin:
+                      type: string
+                      description: Code magasin
+                    Date:
+                      type: string
+                      format: date
+                      description: Date de la pièce (défaut = aujourd'hui)
+                    Objet:
+                      type: string
+                      description: Objet/description de la pièce
+                    Observations:
+                      type: string
+                    Priorite:
+                      type: integer
+                      default: 100
+                    Tarif:
+                      type: string
+                      description: Code tarif (défaut = tarif négoce)
+                    Devise:
+                      type: string
+                      description: Code devise (défaut = devise dossier)
+                    Transporteur:
+                      type: string
+                      description: Code transporteur (défaut = transporteur négoce)
+                    ModeReg:
+                      type: string
+                      description: Mode de règlement (défaut = ModeReg négoce)
+                    Representant:
+                      type: string
+                      description: Code représentant
+                    Secteur_Geographique:
+                      type: string
+                    Intitule_Adresse:
+                      type: string
+                      description: Intitulé de l'adresse de livraison (requis pour BL et TRANSFERT)
+                    Magasin_Destination:
+                      type: string
+                      description: Magasin destination (pour transferts)
+                    Date_Livraison_Souhaitee:
+                      type: string
+                      format: date
+                    Date_Livraison_Prevue:
+                      type: string
+                      format: date
+                    Utilisateur:
+                      type: string
+                      default: "API"
+                    Produits:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ProduitNegoce'
+                - title: creer_panier
+                  type: object
+                  description: |
+                    Crée le panier (entête seule, sans ligne). Tous les champs autres que Client et Nature
+                    sont facultatifs : laissés vides, ils sont hérités de la fiche client puis du paramétrage
+                    dossier négoce. Retourne le `Panier` à passer ensuite à `ajouter_lignes_panier`.
+                  required:
+                    - Client
+                    - Nature
+                  properties:
+                    Client:
+                      type: integer
+                    Nature:
+                      type: string
+                      enum: [DEVIS, PROFORMA, RESERVATION, COMMANDE, BL, TRANSFERT, FACTURE]
+                    Magasin:
+                      type: string
+                    Objet:
+                      type: string
+                    Observations:
+                      type: string
+                    Priorite:
+                      type: integer
+                    Tarif:
+                      type: string
+                    Devise:
+                      type: string
+                    Transporteur:
+                      type: string
+                    ModeReg:
+                      type: string
+                    Delai_Reglement:
+                      type: string
+                    Representant:
+                      type: string
+                    Secteur_Geographique:
+                      type: string
+                    Intitule_Adresse:
+                      type: string
+                    Date_Livraison_Souhaitee:
+                      type: string
+                      format: date
+                    Date_Livraison_Prevue:
+                      type: string
+                      format: date
+                    Utilisateur:
+                      type: string
+                      default: "API"
+                - title: ajouter_lignes_panier
+                  type: object
+                  description: |
+                    Ajoute des lignes au panier. Le client, la nature et le tarif sont relus sur le panier
+                    (pas repris de la requête). Une ligne sans `Prix_Vente` est valorisée au tarif du panier,
+                    avec la remise la plus avantageuse entre celle du tarif et la remise habituelle du client ;
+                    un produit absent du tarif est ajouté à 0 et signalé dans `produits_sans_prix`.
+                    Une ligne dont le produit est fourni seul (sans couleur ni taille) est résolue par recherche SKU.
+                    Réponse : `{Panier, Client, Nature, Tarif, nb_lignes_ajoutees, total_ht_panier, produits_sans_prix}`.
+                  required:
+                    - Panier
+                    - Produits
+                  properties:
+                    Panier:
+                      type: integer
+                      description: ID du panier à alimenter
+                    Produits:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ProduitNegoce'
+                - title: valider_panier
+                  type: object
+                  required:
+                    - Client
+                    - Panier
+                    - Nature
+                    - Magasin
+                  properties:
+                    Client:
+                      type: integer
+                    Panier:
+                      type: integer
+                      description: ID du panier à valider
+                    Nature:
+                      type: string
+                      enum: [DEVIS, PROFORMA, RESERVATION, COMMANDE, BL, TRANSFERT, FACTURE]
+                    Magasin:
+                      type: string
+                    Date:
+                      type: string
+                      format: date
+                    Observations:
+                      type: string
+                    Utilisateur:
+                      type: string
+                - title: url_piece
+                  type: object
+                  required:
+                    - Entete
+                  properties:
+                    Entete:
+                      type: integer
+                      description: Numéro d'entête de la pièce
+                - title: email_piece
+                  type: object
+                  required:
+                    - Numero_Piece
+                  properties:
+                    Numero_Piece:
+                      type: string
+                      description: Numéro de la pièce à envoyer
+                    email:
+                      type: string
+                      description: Adresse destinataire (défaut = email_billing du client)
+                - title: liste_pieces_a_envoyer / envoyer_pieces
+                  type: object
+                  description: |
+                    Envoi en masse des pièces commerciales par email — équivalent API de l'écran
+                    « Négoce / Édition des pièces » (`negoce-edition-pieces.do`).
+
+                    Les deux actions partagent exactement les mêmes filtres :
+                    `liste_pieces_a_envoyer` retourne seulement la sélection (aucun email, aucune écriture),
+                    `envoyer_pieces` envoie réellement chaque pièce et passe les pièces envoyées à `Imprime=1`.
+                    Le flux conseillé est donc : lister, contrôler, puis envoyer avec le même corps JSON
+                    (ou avec la liste d'`Entetes` retenue).
+
+                    Tous les filtres sont facultatifs et se cumulent (ET). Les champs `Entetes`, `Numero_Piece`,
+                    `Nature`, `Magasin` et `Client` acceptent indifféremment une valeur simple ou un tableau
+                    de valeurs. Les pièces de nature `REGLEMENT` et `NOTE` sont toujours exclues.
+
+                    Sans `deja_envoyees`, seules les pièces jamais envoyées sont traitées : rejouer le même
+                    appel n'envoie pas deux fois la même pièce.
+                  properties:
+                    Entetes:
+                      oneOf:
+                        - type: integer
+                        - type: array
+                          items:
+                            type: integer
+                      description: Entête(s) de pièce à traiter (identifiant interne `negoce_entetes.Entete`)
+                    Numero_Piece:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+                      description: Numéro(s) de pièce
+                    Nature:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+                      description: "Nature(s) de pièce, insensible à la casse (FACTURE, AVOIR, BL, COMMANDE, DEVIS, RESERVATION, PROFORMA…)"
+                    Magasin:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+                      description: Magasin(s) émetteur(s)
+                    Client:
+                      oneOf:
+                        - type: integer
+                        - type: array
+                          items:
+                            type: integer
+                      description: Client(s) négoce
+                    date_debut:
+                      type: string
+                      format: date
+                      description: Date de pièce minimum (incluse), format AAAA-MM-JJ
+                    date_fin:
+                      type: string
+                      format: date
+                      description: Date de pièce maximum (incluse), format AAAA-MM-JJ
+                    deja_envoyees:
+                      type: integer
+                      enum: [0, 1]
+                      default: 0
+                      description: "`0` (défaut) : pièces jamais envoyées uniquement (`Imprime=0`). `1` : inclure aussi les pièces déjà envoyées (renvoi)"
+                    limite:
+                      type: integer
+                      default: 200
+                      description: Nombre maximum de pièces traitées en un appel (maxi 1000). `tronque=1` dans la réponse signale que le filtre en sélectionne davantage
+                    email:
+                      type: string
+                      description: Force le destinataire de TOUS les envois au lieu de l'`email_billing` de chaque client (recette / test)
+                    simulation:
+                      type: integer
+                      enum: [0, 1]
+                      default: 0
+                      description: "Action `envoyer_pieces` uniquement — si `1`, aucun email n'est envoyé (comportement de `liste_pieces_a_envoyer`)"
+                - title: creation_client
+                  type: object
+                  description: Au moins Nom ou Siret est requis. Si Siret fourni, enrichissement via Pappers.
+                  properties:
+                    Nom:
+                      type: string
+                    Siret:
+                      type: string
+                - title: relance_client
+                  type: object
+                  required:
+                    - Client
+                  properties:
+                    Client:
+                      type: integer
+                      description: ID du client à relancer (doit avoir un solde > 0)
+                    niveau:
+                      type: integer
+                      enum: [1, 2, 3]
+                      default: 1
+                      description: Niveau de relance (1=rappel, 2=relance, 3=mise en demeure)
+                    email:
+                      type: string
+                      description: Destinataire (défaut = email_billing puis email du client)
+                - title: facturation_affilies
+                  type: object
+                  description: |
+                    Facture les clients affiliés (`negoce_clients.affilie=1`) sur une période.
+                    Pour chaque magasin ayant des ventes/avoirs (`entetes.Statut<>900`) sur [date_debut, date_fin] et
+                    rattaché à exactement UN client affilié (adresse de livraison négoce pointant sur le magasin),
+                    agrège la quantité nette par produit et valorise selon le `Taux_Affiliation` de la fiche client :
+                    - `Taux_Affiliation > 0` : facture le montant HT net des ventes × taux. Pour chaque ligne de vente :
+                      `Quantite × Prix_Vente × (1 − remise/100) / (1 + Taux_TVA/100) × Taux_Affiliation/100`,
+                      la remise de ligne n'étant prise en compte que si un `Motif` est renseigné (sinon remise = 0).
+                    - `Taux_Affiliation = 0` : valorise au tarif du client
+                      (remise de ligne = max(remise tarif, `Remise_Habituelle` du client)).
+
+                    Crée une FACTURE (ou AVOIR si total négatif) émise depuis le magasin de la fiche client
+                    (`negoce_clients.magasin`), applique l'escompte éventuel (`Taux_Escompte` + produit d'escompte
+                    paramétré), puis passe les ventes/avoirs facturés à `Statut=900`. Chaque ligne porte `Ligne_BL=-1`
+                    (pas de re-débit stock).
+                    Validation tout-ou-rien : la moindre erreur (mapping ambigu, prix tarif manquant, client sans
+                    magasin) annule l'ensemble avant toute écriture.
+
+                    Mode simulation (`simulation=1`) : aucune écriture (pas de facture créée, ventes/avoirs non passés à
+                    `Statut=900`) ; la réponse décrit les factures qui seraient produites avec le détail des lignes et
+                    les montants HT/escompte estimés.
+                  required:
+                    - date_debut
+                    - date_fin
+                  properties:
+                    date_debut:
+                      type: string
+                      format: date
+                      description: Date de début de période (incluse)
+                    date_fin:
+                      type: string
+                      format: date
+                      description: Date de fin de période (incluse) — date portée sur les factures créées
+                    client:
+                      type: integer
+                      description: ID du client négoce affilié (facultatif) — restreint le traitement à ce client
+                    simulation:
+                      type: integer
+                      enum: [0, 1]
+                      default: 0
+                      description: Si `1`, simulation seule (aucune écriture) — retourne ce qui serait fait
+            examples:
+              creer_facture:
+                summary: "action=creer_piece — créer une facture"
+                description: "`POST /api/v2/negoce.do?action=creer_piece&Enseigne=DEMO&api-key=...`"
+                value:
+                  Client: 138
+                  Nature: "FACTURE"
+                  Magasin: "DEPOT"
+                  Date: "2026-01-27"
+                  Produits:
+                    - Produit: "CHEMISE01"
+                      Couleur: "BLEU"
+                      Taille: "M"
+                      Quantite: 10
+                      Prix_Vente: 45.00
+                      Remise_Vente: 10
+                      Commentaire: "Livraison urgente"
+              creer_bl:
+                summary: "action=creer_piece — créer un BL"
+                description: "`POST /api/v2/negoce.do?action=creer_piece&Enseigne=DEMO&api-key=...`"
+                value:
+                  Client: 138
+                  Nature: "BL"
+                  Magasin: "DEPOT"
+                  Intitule_Adresse: "SIEGE"
+                  Transporteur: "CHRONOPOST"
+                  Produits:
+                    - Produit: "PANTALON01"
+                      Couleur: "NOIR"
+                      Taille: "42"
+                      Quantite: 5
+              creer_panier:
+                summary: "action=creer_panier — étape 1/3 : créer le panier"
+                description: |
+                  `POST /api/v2/negoce.do?action=creer_panier&Enseigne=DEMO&api-key=...`
+
+                  Retourne le `Panier` (ex. 42) à passer à `ajouter_lignes_panier` puis à `valider_panier`.
+                  Les champs non fournis sont hérités de la fiche client puis du paramétrage dossier négoce.
+                value:
+                  Client: 138
+                  Nature: "COMMANDE"
+                  Objet: "Réassort automne"
+              ajouter_lignes_panier:
+                summary: "action=ajouter_lignes_panier — étape 2/3 : alimenter et valoriser"
+                description: |
+                  `POST /api/v2/negoce.do?action=ajouter_lignes_panier&Enseigne=DEMO&api-key=...`
+
+                  Ici la 1re ligne est valorisée au tarif du panier (ni `Prix_Vente` ni `Remise_Vente` fournis),
+                  la 2e impose son prix et sa remise. La réponse renvoie `total_ht_panier`.
+                  Rappelable autant de fois que voulu sur le même panier.
+                value:
+                  Panier: 42
+                  Produits:
+                    - Produit: "CHEMISE01"
+                      Couleur: "BLEU"
+                      Taille: "M"
+                      Quantite: 10
+                    - Produit: "PANTALON01"
+                      Couleur: "NOIR"
+                      Taille: "42"
+                      Quantite: 5
+                      Prix_Vente: 39.90
+                      Remise_Vente: 5
+              valider_panier:
+                summary: "action=valider_panier — étape 3/3 : transformer en pièce"
+                description: |
+                  `POST /api/v2/negoce.do?action=valider_panier&Enseigne=DEMO&api-key=...`
+
+                  Le triplet Client / Panier / Nature doit être celui du panier. Retourne la pièce créée
+                  (`Entete`, `Numero_Piece`, `url_piece`).
+                value:
+                  Client: 138
+                  Panier: 42
+                  Nature: "COMMANDE"
+                  Magasin: "DEPOT"
+                  Date: "2026-01-27"
+              url_piece:
+                summary: "action=url_piece — récupérer l'URL et le XML Factur-X"
+                description: "`POST /api/v2/negoce.do?action=url_piece&Enseigne=DEMO&api-key=...`"
+                value:
+                  Entete: 12345
+              email_piece:
+                summary: "action=email_piece — envoyer une pièce par email"
+                description: "`POST /api/v2/negoce.do?action=email_piece&Enseigne=DEMO&api-key=...`"
+                value:
+                  Numero_Piece: "FA-2026-00123"
+                  email: "client@example.com"
+              liste_pieces_a_envoyer:
+                summary: "action=liste_pieces_a_envoyer — factures du mois non encore envoyées"
+                description: "`POST /api/v2/negoce.do?action=liste_pieces_a_envoyer&Enseigne=DEMO&api-key=...`"
+                value:
+                  Nature: "FACTURE"
+                  date_debut: "2026-08-01"
+                  date_fin: "2026-08-31"
+              envoyer_pieces_filtre:
+                summary: "action=envoyer_pieces — envoyer les factures du mois d'un magasin"
+                description: "`POST /api/v2/negoce.do?action=envoyer_pieces&Enseigne=DEMO&api-key=...`"
+                value:
+                  Nature: ["FACTURE", "AVOIR"]
+                  Magasin: "DEPOT"
+                  date_debut: "2026-08-01"
+                  date_fin: "2026-08-31"
+                  limite: 100
+              envoyer_pieces_entetes:
+                summary: "action=envoyer_pieces — envoyer une liste d'entêtes précise"
+                description: "`POST /api/v2/negoce.do?action=envoyer_pieces&Enseigne=DEMO&api-key=...`"
+                value:
+                  Entetes: [12345, 12346, 12350]
+              creation_client:
+                summary: "action=creation_client — créer un client par Siret"
+                description: "`POST /api/v2/negoce.do?action=creation_client&Enseigne=DEMO&api-key=...`"
+                value:
+                  Siret: "12345678900012"
+              relance_client:
+                summary: "action=relance_client — relancer un client (niveau 2)"
+                description: "`POST /api/v2/negoce.do?action=relance_client&Enseigne=DEMO&api-key=...`"
+                value:
+                  Client: 138
+                  niveau: 2
+              facturation_affilies:
+                summary: "action=facturation_affilies — facturer les affiliés sur une période"
+                description: "`POST /api/v2/negoce.do?action=facturation_affilies&Enseigne=DEMO&api-key=...`"
+                value:
+                  date_debut: "2026-05-01"
+                  date_fin: "2026-05-31"
+                  client: 138
+              facturation_affilies_simulation:
+                summary: "action=facturation_affilies — simulation (aucune écriture)"
+                description: "`POST /api/v2/negoce.do?action=facturation_affilies&Enseigne=DEMO&api-key=...`"
+                value:
+                  date_debut: "2026-05-01"
+                  date_fin: "2026-05-31"
+                  simulation: 1
+      responses:
+        '200':
+          description: Succès (le contenu de `data` dépend de l'action)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [ok]
+                  data:
+                    type: object
+                    description: |
+                      Champs selon l'action :
+                      - creer_piece / valider_panier : Entete, Nature, Numero_Piece, url_piece
+                      - url_piece : url_piece
+                      - email_piece : Entete, Numero_Piece, email
+                      - liste_pieces_a_envoyer / envoyer_pieces : envoi, nb_pieces_filtre, limite, tronque, nb_pieces, nb_envoyees, nb_erreurs, nb_sans_email, pieces[]
+                      - creation_client : Client, Nom, Siret, Ville
+                      - relance_client : Client, Nom, email, niveau, Solde
+                      - facturation_affilies : simulation, periode, nb_factures, factures[], magasins_ignores[]
+                    properties:
+                      Entete:
+                        type: integer
+                      Nature:
+                        type: string
+                      Numero_Piece:
+                        type: string
+                      url_piece:
+                        type: string
+                      Client:
+                        type: integer
+                      Nom:
+                        type: string
+                      Siret:
+                        type: string
+                      Ville:
+                        type: string
+                      email:
+                        type: string
+                      niveau:
+                        type: integer
+                      Solde:
+                        type: number
+                      simulation:
+                        type: integer
+                        enum: [0, 1]
+                        description: "1 si la réponse provient d'une simulation (aucune écriture), sinon 0 (action facturation_affilies)"
+                      periode:
+                        type: object
+                        description: "Période traitée (action facturation_affilies)"
+                        properties:
+                          debut:
+                            type: string
+                            format: date
+                          fin:
+                            type: string
+                            format: date
+                      nb_factures:
+                        type: integer
+                        description: "Nombre de pièces créées — ou qui seraient créées en simulation (action facturation_affilies)"
+                      factures:
+                        type: array
+                        description: "Pièces créées — ou projetées en simulation (action facturation_affilies)"
+                        items:
+                          type: object
+                          properties:
+                            magasin:
+                              type: string
+                              description: Magasin des ventes (dont les tickets sont passés à Statut=900)
+                            magasin_emetteur:
+                              type: string
+                              description: Magasin émetteur de la facture (negoce_clients.magasin)
+                            client:
+                              type: integer
+                            entete:
+                              type: integer
+                              description: "Présent en mode réel uniquement (simulation=0)"
+                            nature:
+                              type: string
+                              description: "FACTURE ou AVOIR — présent en mode réel uniquement (simulation=0)"
+                            numero_piece:
+                              type: string
+                              description: "Présent en mode réel uniquement (simulation=0)"
+                            url_piece:
+                              type: string
+                              description: "URL de téléchargement (PDF) de la pièce commerciale créée — présent en mode réel uniquement (simulation=0)"
+                            tarif:
+                              type: string
+                              description: "Tarif de la fiche client — présent en simulation uniquement (simulation=1)"
+                            devise:
+                              type: string
+                              description: "Présent en simulation uniquement (simulation=1), si renseignée sur la fiche client"
+                            intitule_adresse:
+                              type: string
+                              description: "Adresse de livraison retenue — présent en simulation uniquement (simulation=1)"
+                            montant_ht_estime:
+                              type: number
+                              description: "Montant HT estimé (avant escompte) — présent en simulation uniquement (simulation=1)"
+                            taux_escompte:
+                              type: number
+                              description: "Taux d'escompte du client — présent en simulation uniquement (simulation=1)"
+                            escompte_estime:
+                              type: number
+                              description: "Escompte estimé (négatif) — présent en simulation uniquement (simulation=1)"
+                            lignes:
+                              type: array
+                              description: "Lignes prévues de la facture — présent en simulation uniquement (simulation=1)"
+                              items:
+                                type: object
+                                properties:
+                                  produit:
+                                    type: string
+                                  couleur:
+                                    type: string
+                                  taille:
+                                    type: string
+                                  designation:
+                                    type: string
+                                  quantite:
+                                    type: number
+                                    description: Quantité nette (ventes − avoirs)
+                                  prix_vente:
+                                    type: number
+                                    description: Prix unitaire retenu (tarif client, ou prix synthétique issu du Taux_Affiliation)
+                                  remise_vente:
+                                    type: number
+                                  ligne_bl:
+                                    type: integer
+                                    description: Toujours -1 (pas de re-débit stock)
+                      envoi:
+                        type: integer
+                        enum: [0, 1]
+                        description: "1 si les emails ont réellement été envoyés, 0 pour une simple liste (actions liste_pieces_a_envoyer / envoyer_pieces)"
+                      nb_pieces_filtre:
+                        type: integer
+                        description: "Nombre total de pièces correspondant au filtre, avant application de `limite`"
+                      limite:
+                        type: integer
+                        description: "Limite effectivement appliquée"
+                      tronque:
+                        type: integer
+                        enum: [0, 1]
+                        description: "1 si le filtre sélectionne plus de pièces que la limite (rappeler l'action pour traiter la suite)"
+                      nb_pieces:
+                        type: integer
+                        description: "Nombre de pièces retournées dans `pieces[]`"
+                      nb_envoyees:
+                        type: integer
+                        description: "Nombre de pièces effectivement envoyées"
+                      nb_erreurs:
+                        type: integer
+                        description: "Nombre de pièces en échec d'envoi"
+                      nb_sans_email:
+                        type: integer
+                        description: "Nombre de pièces sans adresse email (non envoyées)"
+                      pieces:
+                        type: array
+                        description: "Détail pièce par pièce (actions liste_pieces_a_envoyer / envoyer_pieces)"
+                        items:
+                          type: object
+                          properties:
+                            entete:
+                              type: integer
+                            date:
+                              type: string
+                              format: date
+                            magasin:
+                              type: string
+                            nature:
+                              type: string
+                            numero_piece:
+                              type: string
+                            client:
+                              type: integer
+                            nom:
+                              type: string
+                            total_ht:
+                              type: number
+                            total_ttc:
+                              type: number
+                            devise:
+                              type: string
+                            deja_envoyee:
+                              type: integer
+                              enum: [0, 1]
+                              description: "État `Imprime` de la pièce AVANT traitement"
+                            email:
+                              type: string
+                              description: "Destinataire retenu (email_billing du client, ou `email` imposé dans la requête)"
+                            statut:
+                              type: string
+                              enum: [a_envoyer, envoyee, erreur, sans_email]
+                              description: "`a_envoyer` en mode liste/simulation, sinon le résultat de l'envoi"
+                            erreur:
+                              type: string
+                              description: "Message d'erreur si statut=erreur, sinon vide"
+                      magasins_ignores:
+                        type: array
+                        description: "Magasins non facturés et leur raison (action facturation_affilies)"
+                        items:
+                          type: object
+                          properties:
+                            magasin:
+                              type: string
+                            raison:
+                              type: string
+              example:
+                result: ok
+                data:
+                  Entete: 12345
+                  Nature: "FACTURE"
+                  Numero_Piece: "FA-2026-00123"
+                  url_piece: "https://example.com/negoce-edition-pieces.do?Entete=12345"
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_action:
+                  value:
+                    result: ko
+                    error_message: "missing action"
+                client_non_trouve:
+                  value:
+                    result: ko
+                    error_message: "client non trouvé"
+                magasin_non_trouve:
+                  value:
+                    result: ko
+                    error_message: "magasin non trouvé"
+                nature_inconnue:
+                  value:
+                    result: ko
+                    error_message: "Nature inconnue"
+                produit_non_trouve:
+                  value:
+                    result: ko
+                    error_message: "Produit non trouvé(S) : INCONNU BLEU M"
+                adresse_requise_bl:
+                  value:
+                    result: ko
+                    error_message: "une adresse de livraison est nécessaire pour le BL"
+                adresse_requise_transfert:
+                  value:
+                    result: ko
+                    error_message: "une adresse de livraison est nécessaire pour le TRANSFERT"
+                numero_piece_obligatoire:
+                  value:
+                    result: ko
+                    error_message: "Numero_Piece obligatoire"
+                nom_ou_siret:
+                  value:
+                    result: ko
+                    error_message: "Nom ou Siret obligatoire"
+                pas_de_solde:
+                  value:
+                    result: ko
+                    error_message: "Ce client n'a pas de solde débiteur"
+                facturation_affilies_annulee:
+                  value:
+                    result: ko
+                    error_message: "Facturation affilies annulee (tout ou rien) : magasin LYON01 (client 138, tarif NEGOCE) : produits sans prix : CHEMISE01 BLEU M"
+      security:
+        - apiKey: []
+          enseigne: []
+
+  # ==================== TAX-FREE ====================
+  /planet-pii.do:
+    get:
+      tags:
+        - Tax-Free
+      summary: Export XML Tax-Free (Planet PII)
+      description: |
+        Exporte les données d'une transaction au format XML Planet PII pour le traitement tax-free.
+        
+        **Permission requise :** `api_planet_pii`
+        
+        Le fichier XML contient :
+        - Données marchand (nom, adresse, TVA)
+        - Détails transaction (date, heure, numéro facture)
+        - Lignes articles avec TVA
+        - Méthodes de paiement
+        - Données client (si disponibles)
+      operationId: planetPiiExport
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+        - name: Entete
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Numéro d'entête du ticket (VENTE ou AVOIR)
+      responses:
+        '200':
+          description: Fichier XML Planet PII
+          content:
+            text/xml:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="Planet_PII.XML"'
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                entete_not_found:
+                  value:
+                    result: ko
+                    error_message: "Entete not found"
+      security:
+        - apiKey: []
+          enseigne: []
+
+
+  # ==================== RAPPORTS ====================
+  /generation-rapports.do:
+    post:
+      tags:
+        - Rapports
+      summary: Générer une URL de rapport
+      description: |
+        Génère une URL pour télécharger un rapport au format PDF ou HTML.
+        
+        **Permission requise :** `api_generation_rapports`
+        
+        Le rapport est identifié par son ID dans la table `fat` (Type='document').
+        Les paramètres additionnels sont passés au rapport pour filtrer les données.
+      operationId: generationRapports
+      parameters:
+        - $ref: '#/components/parameters/enseigne'
+        - $ref: '#/components/parameters/apiKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id_rapport
+              properties:
+                id_rapport:
+                  type: string
+                  description: ID du rapport dans la table fat (Type='document')
+                parametres:
+                  type: array
+                  description: Paramètres additionnels pour le rapport
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Nom du paramètre
+                      value:
+                        type: string
+                        description: Valeur du paramètre
+                format:
+                  type: string
+                  enum: [pdf, html]
+                  default: pdf
+                  description: Format de sortie (pdf ou html)
+            example:
+              id_rapport: "12345"
+              parametres:
+                - name: "Date_Debut"
+                  value: "2026-01-01"
+                - name: "Date_Fin"
+                  value: "2026-01-31"
+              format: "pdf"
+      responses:
+        '200':
+          description: URL du rapport générée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    example: ok
+                  url:
+                    type: string
+                    description: URL pour télécharger le rapport
+              example:
+                result: ok
+                url: "https://pdf2.joolan.com/api/render?url=..."
+        '400':
+          description: Erreur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rapport_not_found:
+                  value:
+                    result: ko
+                    error_message: "Report not found"
+                format_invalide:
+                  value:
+                    result: ko
+                    error_message: "format invalide (pdf ou html attendu)"
+      security:
+        - apiKey: []
+          enseigne: []

@@ -1,9 +1,18 @@
-node_modules
-dist
-.DS_Store
-*.local
+# Journaux du service (créés par deploy/windows/run-service.ps1)
+logs/
 
-agent/.env
-agent/data/
-agent/reports/
+# Secrets et bases : voir aussi crk-backend/.gitignore et Dashboard/.gitignore
+.env
+*.db
+*.db-wal
+*.db-shm
+
+node_modules/
+dist/
 __pycache__/
+*.py[cod]
+venv/
+.venv/
+
+.DS_Store
+Thumbs.db

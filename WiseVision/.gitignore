@@ -1,0 +1,93 @@
+# =============================================================================
+# WiseVision — this repo publishes FOUR things only:
+#     Final-code_v1.py      the pipeline
+#     README.md             the documentation
+#     requirements.txt      the dependencies
+#     tools for help/       the helper scripts
+# Everything else below stays LOCAL ON DISK and out of GitHub.
+# =============================================================================
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# --- Virtual environment -----------------------------------------------------
+venv/
+env/
+.venv/
+
+# --- Model weights (auto-download on first run; never commit) ----------------
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# --- Videos ------------------------------------------------------------------
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# --- Images / diagnostic crops -----------------------------------------------
+*.png
+*.jpg
+*.jpeg
+
+# --- IDE / OS / logs ---------------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+*.log
+
+# =============================================================================
+# LOCAL-ONLY WORK  — earlier iterations and experiments, kept on disk
+# =============================================================================
+
+# earlier pipeline versions + the ResNet18 classifier branch
+Final version_-Ahmed/
+
+# the two superseded methods (BoT-SORT+ReID photo, ByteTrack baseline)
+bot-sort-version/
+bytetrack-version/
+
+# earlier iterations (SC1/SC2/SC4) and exploratory notebooks — superseded by Final-code_v1.py
+PEC method of Maram/
+method of saving clients/
+
+# notebooks
+*.ipynb
+
+# local notes, logs and calibration output
+pec.txt
+our solution.txt
+_*.txt
+_*/
+uniform_calib/
+staff_gallery/
+staff_ref/
+seller/
+client/
+seller_calib*/
+seller_diag*/
+seller_full/
+seller_gt/
+seller_ref*/
+seller_yolo_dataset/
+testvid_crops/
+testvid_frames/
+fp_check/
+_classify_preview/
+_served_crops/
+main1_bytetrack.py
+*.yaml
+
+# NOTE: requirements.txt IS tracked (it is one of the four published files).
+# The old "requirements.txt" ignore rule was removed on purpose.

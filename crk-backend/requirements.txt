@@ -1,0 +1,7 @@
+# Versions figées : une VM qui réinstalle des mois plus tard doit obtenir
+# exactement ce qui a été testé. FastAPI suit pydantic de près — laisser ces
+# lignes ouvertes, c'est risquer une VM qui ne démarre plus après un pip install.
+# Pour monter de version : modifier ici, retester, committer.
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-dotenv==1.2.3

@@ -1,0 +1,41 @@
+# WiseVision - Final-code_v1.py dependencies   (Python 3.10+)
+#
+# ---------------------------------------------------------------------------
+# STEP 1 - install PyTorch FIRST, from the CUDA index (much faster than CPU).
+#          These exact versions are the ones this project was validated on:
+#
+#     pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu118
+#
+#          For another CUDA version pick the matching index from https://pytorch.org .
+#          CPU-only also works - the code auto-falls back - but expect it to be
+#          far slower.
+#
+# STEP 2 - install the rest:
+#
+#     pip install -r requirements.txt
+# ---------------------------------------------------------------------------
+
+# --- core pipeline ---------------------------------------------------------
+ultralytics==8.4.66        # YOLO11m-pose: person boxes + 17 keypoints
+boxmot==20.0.0             # BoT-SORT tracker + OSNet ReID backend
+supervision==0.28.0        # video reader / writer (VideoInfo, VideoSink)
+opencv-python==4.13.0.92   # all image ops: HSV, polygons, drawing
+numpy==2.2.6               # arrays / geometry
+
+# --- deep-learning runtime (see STEP 1 above - install from the CUDA index) --
+torch==2.7.1
+torchvision==0.22.1
+
+# ---------------------------------------------------------------------------
+# MODEL WEIGHTS - not pip packages. Both auto-download on the first run,
+# there is NO manual download step:
+#
+#   yolo11m-pose.pt              person detection + pose  (via ultralytics)
+#   osnet_ain_x1_0_msmt17.pt     ReID for BoT-SORT        (via boxmot)
+#
+# You only supply the INPUT VIDEO: set SOURCE_VIDEO_PATH in Final-code_v1.py.
+# ---------------------------------------------------------------------------
+#
+# The helper scripts in "tools for help/" need nothing beyond the above,
+# except concat_videos.py which calls ffmpeg (a system install, or
+# `pip install imageio-ffmpeg` - the script finds either).

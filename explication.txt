@@ -1,0 +1,220 @@
+================================================================================
+CRK ANALYTICS - DEUX POINTS IMPORTANTS EXPLIQUES
+================================================================================
+
+Ce fichier repond a deux questions :
+  1. Ou sont stockees les donnees, et pourquoi il n'y a pas de PostgreSQL ?
+  2. A quoi sert CRK_API_KEY ?
+
+
+================================================================================
+1. LA BASE DE DONNEES : SQLITE
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1  Oui, il y a bien une vraie base de donnees
+--------------------------------------------------------------------------------
+
+C'est la confusion la plus frequente : "pas de PostgreSQL" ne veut pas dire
+"pas de base de donnees". Le projet utilise SQLITE, qui est une vraie base
+SQL.
+
+  Etat actuel mesure :
+    version SQLite  : 3.49.1 (fournie avec Python)
+    fichier         : crk-backend/crk_analytics.db
+    lignes          : ~7 600
+    taille          : ~890 Ko
+    index           : idx_store_ts sur (store_id, ts)
+    mode            : WAL
+
+Vraies tables, vrais index, vraies transactions, vrai SQL. Toutes les requetes
+du dashboard sont des SELECT ... WHERE ... GROUP BY sur cette base.
+
+
+--------------------------------------------------------------------------------
+1.2  La difference : un SERVEUR contre un FICHIER
+--------------------------------------------------------------------------------
+
+                        PostgreSQL / MySQL        SQLite
+  ---------------------------------------------------------------------------
+  Ce que c'est          un PROGRAMME qui tourne   un FICHIER que le
+                        en permanence             programme lit directement
+
+  A installer           oui : serveur + user +    rien, c'est inclus
+                        mot de passe + port       avec Python
+
+  Les donnees vivent    dans le stockage interne  dans crk_analytics.db
+                        du serveur
+
+  Sauvegarder           pg_dump, un outil dedie   copier le fichier
+
+  Deplacer              export puis import        copier le fichier
+
+Cette derniere ligne, on l'a vecue : pour recuperer l'historique depuis le
+dossier Wisevision vers le nouveau dossier, un simple Copy-Item du fichier a
+suffi. Avec PostgreSQL il aurait fallu un dump, une restauration, et recreer
+les utilisateurs et les droits.
+
+
+--------------------------------------------------------------------------------
+1.3  Pourquoi SQLite est le bon choix ICI
+--------------------------------------------------------------------------------
+
+  * UN SEUL ECRIVAIN
+    Seul le backend ecrit dans la base. C'est exactement le cas d'usage ou
+    SQLite est excellent.
+
+  * PETIT VOLUME
+    ~350 evenements par jour et par magasin. Avec 8 magasins, cela fait
+    environ 1 million de lignes par an. SQLite gere sans peine des centaines
+    de millions de lignes.
+
+  * L'INDEX FAIT LE TRAVAIL
+    L'index (store_id, ts) correspond exactement a la question que pose le
+    dashboard : "ce magasin, entre ces deux dates". Reponse instantanee.
+
+  * LE MODE WAL PERMET DE LIRE PENDANT QU'ON ECRIT
+    C'est pour cela que lancer watch_events.py ne perturbe pas le service.
+
+  * MOINS DE CHOSES QUI PEUVENT CASSER
+    Pas de serveur a demarrer, pas de port a se disputer, pas de mot de passe
+    a perdre. Vu le temps passe sur les conflits de port et de service lors du
+    deploiement, ce n'est pas un detail.
+
+
+--------------------------------------------------------------------------------
+1.4  Quand il FAUDRA passer a PostgreSQL
+--------------------------------------------------------------------------------
+
+Des qu'une seule de ces conditions devient vraie :
+
+  1. PLUSIEURS MACHINES ecrivent dans la meme base
+  2. PLUSIEURS SERVICES ecrivent en meme temps (pas seulement le backend)
+  3. Des dizaines de millions de lignes ET des requetes qui ralentissent
+  4. Besoin de replication ou d'un serveur de secours (hot standby)
+
+Aujourd'hui, aucune ne s'applique.
+
+Et si cela arrive : la table fait SIX COLONNES
+(id, store_id, event_type, ts, pec_id, received_at). La migration est une
+apres-midi de travail, pas une reecriture. C'est aussi pour cela que le schema
+a ete reduit au strict necessaire.
+
+
+--------------------------------------------------------------------------------
+1.5  Remarque
+--------------------------------------------------------------------------------
+
+La base contient aussi une table `store_config` inutilisee, heritee d'une
+ancienne version du backend. Elle ne gene rien (aucun code ne la lit) et peut
+etre supprimee lors d'un nettoyage.
+
+
+================================================================================
+2. CRK_API_KEY : LE MOT DE PASSE DES BOITIERS JETSON
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1  Ce que c'est
+--------------------------------------------------------------------------------
+
+  CRK_API_KEY=9bcc4a257c22e63154f7ebe4afe4636a
+
+C'est un secret partage. La MEME valeur se trouve a deux endroits :
+
+  1. crk-backend/.env            (sur la VM)
+  2. la configuration de CHAQUE boitier Jetson
+
+A chaque envoi, le boitier joint cette cle dans un en-tete HTTP :
+
+  POST http://192.168.2.210:8080/ingest/batch
+  X-API-Key: 9bcc4a257c22e63154f7ebe4afe4636a
+  Content-Type: application/json
+
+  { "events": [ ... ] }
+
+Le backend compare la cle recue a la sienne. Si elles ne correspondent pas :
+reponse 401, et les evenements sont REFUSES.
+
+Le code, dans main.py :
+
+  def verify_api_key(x_api_key: str | None = Header(default=None)):
+      if x_api_key != API_KEY:
+          raise HTTPException(status_code=401, detail="invalid or missing API key")
+
+
+--------------------------------------------------------------------------------
+2.2  Pourquoi c'est necessaire
+--------------------------------------------------------------------------------
+
+Les routes /ingest/* ECRIVENT DANS LA BASE.
+
+Sans cle, n'importe qui pouvant atteindre le port 8080 pourrait envoyer des
+milliers de faux evenements. Le dashboard serait durablement faux, et il n'y
+aurait AUCUN moyen de distinguer les vraies lignes des fausses.
+
+La cle garantit une chose simple : seuls les boitiers que vous avez configures
+peuvent ecrire.
+
+
+--------------------------------------------------------------------------------
+2.3  IMPORTANT : elle protege l'ECRITURE, pas la LECTURE
+--------------------------------------------------------------------------------
+
+La cle n'est exigee que sur DEUX routes :
+
+  @app.post("/ingest/event",  dependencies=[Depends(verify_api_key)])   <- protege
+  @app.post("/ingest/batch",  dependencies=[Depends(verify_api_key)])   <- protege
+
+Les routes /api/* et le dashboard lui-meme n'ont AUCUNE cle. Quiconque atteint
+http://192.168.2.210:8080 voit les chiffres des magasins.
+
+C'est un choix assume : c'est ce qui permet a un collegue d'ouvrir le dashboard
+sans rien installer.
+
+Deux consequences a connaitre :
+
+  * Sur un reseau non maitrise, restreindre la regle de pare-feu aux adresses
+    des boutiques, ou placer le service derriere un VPN.
+
+  * Le trafic est en HTTP, pas HTTPS : la cle circule EN CLAIR sur le reseau.
+    Acceptable sur un reseau local prive. Pas acceptable a travers Internet.
+    Pour du HTTPS, mettre un reverse proxy (IIS ou nginx) devant et fermer le
+    port applicatif a l'exterieur.
+
+
+--------------------------------------------------------------------------------
+2.4  Comment changer la cle
+--------------------------------------------------------------------------------
+
+LES TROIS ETAPES VONT ENSEMBLE :
+
+  1. nouvelle valeur dans crk-backend\.env
+  2. Restart-Service CRKAnalytics
+  3. LA MEME valeur sur CHAQUE boitier Jetson
+
+ATTENTION : ne changer que le cote serveur arrete SILENCIEUSEMENT toute
+l'ingestion. Les boitiers recoivent 401, et les donnees de la periode sont
+perdues.
+
+Pour verifier apres un changement :
+
+  Invoke-RestMethod "http://localhost:8080/api/last-seen?magasin=MANAR%20CITY"
+
+Si `seconds_ago` continue d'augmenter au-dela de 30 minutes pendant les heures
+d'ouverture, les boitiers sont rejetes : verifier que la cle est identique des
+deux cotes.
+
+
+================================================================================
+RESUME EN DEUX PHRASES
+================================================================================
+
+1. SQLite EST une vraie base de donnees. Le projet n'a pas besoin de
+   PostgreSQL aujourd'hui : un seul ecrivain, faible volume, et un schema de
+   six colonnes qui rendrait une migration future facile si cela devenait
+   necessaire.
+
+2. CRK_API_KEY empeche n'importe qui d'INJECTER de fausses donnees. Elle ne
+   protege pas la LECTURE : le dashboard reste accessible a tous ceux qui
+   atteignent le port, ce qui est voulu.

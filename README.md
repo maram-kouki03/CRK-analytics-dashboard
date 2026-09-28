@@ -1,155 +1,134 @@
-# CRK — Plateforme d'Analyse Retail
+# CRK Analytics
 
-Tableau de bord d'analyse des performances des points de vente **CRK Maroquinier** (8 magasins en Tunisie).
-La plateforme visualise les indicateurs issus de la pipeline de vision par ordinateur :
-clients entrés, prises en charge (PEC), taux PEC, vendeurs actifs et temps moyen avant PEC.
+**A retail intelligence platform that turns in-store cameras and point-of-sale data into a single, trustworthy dashboard.**
+
+CRK Analytics was built for **CRK Maroquinier**, a leather-goods retailer with 8 stores in Tunisia. A computer-vision pipeline running on an **NVIDIA Jetson** in each store counts customers and staff interactions in real time; a backend cross-references that footfall against **Joolan POS** sales data; a React dashboard turns the result into conversion rates, sales potential, and an opportunity gap that store managers can act on.
+
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](Dashboard)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](Dashboard)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](crk-backend)
+[![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)](crk-backend)
+[![Ultralytics YOLO11](https://img.shields.io/badge/YOLO11--pose-Ultralytics-00FFFF)](WiseVision)
+[![PyTorch](https://img.shields.io/badge/PyTorch-CUDA-EE4C2C?logo=pytorch&logoColor=white)](WiseVision)
+
+> 📘 **Want the full story?** [`DOCUMENT.md`](DOCUMENT.md) is a from-scratch, chapter-by-chapter course covering every layer of this system, every design decision and why it was made, the data model, the API, and the deployment. This README is the fast tour; that document is the deep one.
 
 ---
 
-## 📸 Aperçu
+## Live demo
 
-La plateforme contient **deux pages** :
+**[crk-analytics-dashboard-wv5.vercel.app](https://crk-analytics-dashboard-wv5.vercel.app/)** — a static deployment of the [`Dashboard`](Dashboard) frontend, running on **mock data**, so anyone can click through the UI without touching real store data.
 
-| Page | URL | Contenu |
+The production system is not public. It runs on a private Windows Server VM inside CRK's network, fed live by the in-store cameras and the Joolan point-of-sale system — see [Deployment](#deployment) below.
+
+---
+
+## How it works
+
+```
+   In-store camera                                       Joolan POS
+         │                                                     ▲
+         ▼                                                     │
+┌──────────────────┐   HTTP POST /ingest/batch      ┌──────────┴──────────┐
+│   WiseVision      │   (X-API-Key, every few sec)   │  crk-backend        │
+│   Jetson / edge AI│ ──────────────────────────────►│  FastAPI + SQLite   │
+│                    │   ENTRY / INTERACTION events   │  (WAL mode)         │
+│  YOLO11-pose       │                                 │                      │
+│  + BoT-SORT ReID   │                                 │  aggregates at      │
+│  role + zone logic │                                 │  READ time, never   │
+└──────────────────┘                                 │  pre-computed        │
+                                                        └──────────┬──────────┘
+                                                                   │ GET /api/*
+                                                                   ▼
+                                                        ┌──────────────────────┐
+                                                        │  Dashboard (React)    │
+                                                        │  Overview · Compare   │
+                                                        │  · AI-written reports │
+                                                        └──────────────────────┘
+```
+
+**No image ever leaves the store.** The Jetson turns video into discrete events (`ENTRY`, `INTERACTION`) — about 80 bytes each — and only those events cross the network. The backend never re-judges what the AI decided; it counts. Every indicator is computed at read time from raw events, so changing a business rule is a code change, never a data migration. And a number that can't be measured is `null`, shown as `—`, never a silent `0` — see [DOCUMENT.md, "The three rules"](DOCUMENT.md#the-three-rules-that-govern-the-whole-project) for why that discipline is the difference between a trustworthy dashboard and a decorative one.
+
+---
+
+## Repository structure
+
+| Folder | Role | Stack |
 |---|---|---|
-| **Vue d'ensemble** | `/` | KPI du jour + 4 visualisations pour un magasin et une date donnés |
-| **Comparaison** | `/comparaison` | Classement et comparaison des 8 magasins sur 7 jours |
+| [`WiseVision/`](WiseVision) | Edge AI: person detection, staff/customer classification, entry counting, interaction (hand-off) detection — runs on the Jetson in-store | Python, YOLO11-pose, BoT-SORT + OSNet ReID |
+| [`crk-backend/`](crk-backend) | Ingests camera events, queries the Joolan POS API, aggregates everything at read time, serves the built dashboard | FastAPI, SQLite (WAL) |
+| [`Dashboard/`](Dashboard) | The UI: footfall, sales-potential KPIs, store comparison, AI-generated reports | React 18, Vite 5, Recharts |
+| [`deploy/windows/`](deploy/windows) | One idempotent script that installs everything as a self-restarting Windows service | PowerShell |
+| [`swagger.yaml`](swagger.yaml) | Full OpenAPI spec of the Joolan POS API this project integrates with | OpenAPI 3 |
 
-### Vue d'ensemble
-- 5 cartes KPI avec variation vs la veille (clients entrés, nombre de PEC, taux PEC, vendeurs actifs, temps moyen avant PEC)
-- Courbe d'affluence par heure (heure de pointe)
-- Taux PEC par heure
-- Évolution hebdomadaire du taux PEC (cette semaine vs semaine dernière)
-- Heatmap de présence clients (heure × jour)
-- **Sélecteur de date** (calendrier, dates futures bloquées) et **sélecteur de magasin** (les 8 points de vente)
-
-### Comparaison
-- Cartes "meilleur magasin" par indicateur
-- Tableau de performances des 8 magasins
-- Graphes comparatifs (taux PEC, clients entrés, temps moyen avant PEC)
-- Évolution hebdomadaire multi-magasins
-- Conclusion générée automatiquement à partir des données
-
-### Les 8 points de vente
-Mall of Sousse · Tunisia Mall · Mall of Sfax · Sfax 1 · La Marsa · Azur City · MANAR CITY · Menzah 5
+Only the backend and the dashboard talk to each other directly (same-origin, one process, one port — no CORS, no reverse proxy). WiseVision is a separate, standalone pipeline: it emits events over HTTP and has no other coupling to the rest of the codebase.
 
 ---
 
-## 🚀 Accéder au projet et le lancer
+## Quick start (development)
 
-### Prérequis
-- [Node.js](https://nodejs.org/) version 18 ou plus (vérifier avec `node -v`)
-- npm (installé automatiquement avec Node.js)
-
-### Installation
+Two terminals — the backend first.
 
 ```bash
-# 1. Cloner le dépôt (ou télécharger et décompresser le zip)
-git clone https://github.com/<votre-compte>/crk-dashboard.git
-cd crk-dashboard
+# Terminal A — backend
+cd crk-backend
+pip install -r requirements.txt
+cp .env.example .env          # set CRK_API_KEY
+py main.py                    # http://localhost:8000
 
-# 2. Installer les dépendances
+# Terminal B — dashboard
+cd Dashboard
 npm install
-
-# 3. Lancer le serveur de développement
-npm run dev
+npm run dev                   # http://localhost:5173
 ```
 
-Puis ouvrir **http://localhost:5173** dans le navigateur.
+The dashboard calls `/api/...` with relative URLs; Vite's dev proxy (`Dashboard/vite.config.js`) forwards them to `CRK_BACKEND_URL` (`http://localhost:8080` by default — set it in `Dashboard/.env` if your backend listens elsewhere, e.g. port 8000).
 
-### Construire pour la production
-
-```bash
-npm run build      # génère le dossier dist/
-npm run preview    # tester la version de production en local
-```
-
-Le dossier `dist/` généré peut être déployé sur n'importe quel hébergeur statique
-(Vercel, Netlify, GitHub Pages, ou un serveur nginx/Apache).
+Running WiseVision's pipeline locally (against your own footage) is documented in [`WiseVision/README.md`](WiseVision/README.md).
 
 ---
 
-## 📁 Structure du projet
+## Deployment
 
+A single service serves the dashboard **and** the API on the same port — no nginx, no CORS, no backend URL baked into the frontend build. On the target Windows Server VM, in an **administrator** PowerShell console:
+
+```powershell
+cd C:\path\to\CRK-analytics-dashboard
+.\deploy\windows\install.ps1 -Port 8000
 ```
-crk-dashboard/
-├── index.html                    # Point d'entrée HTML (fonts, titre)
-├── package.json                  # Dépendances et scripts
-├── vite.config.js                # Configuration Vite
-└── src/
-    ├── main.jsx                  # Bootstrap React
-    ├── App.jsx                   # Routing + état du sidebar
-    ├── index.css                 # Tous les styles (palette CRK)
-    ├── assets/
-    │   └── logo-crk.png          # Logo CRK (remplaçable)
-    ├── components/
-    │   ├── Sidebar.jsx           # Menu latéral rétractable
-    │   ├── Topbar.jsx            # Barre du haut (sélecteurs date + magasin)
-    │   └── Calendar.jsx          # Calendrier custom (sans librairie)
-    ├── pages/
-    │   ├── Dashboard.jsx         # Page vue d'ensemble
-    │   └── Comparaison.jsx       # Page comparaison des 8 magasins
-    └── data/
-        └── mockData.js           # ⚠️ Données de démonstration
-```
+
+The script provisions the Python venv, installs pinned dependencies, generates `.env` with a random API key, builds the dashboard, registers a self-restarting scheduled task, opens the firewall, and verifies the deployment before exiting. It's **idempotent** — rerunning it after a `git pull` updates the service without touching `.env` or the database.
+
+Full runbook (operations, backup, troubleshooting): [`deploy/windows/README.md`](deploy/windows/README.md).
 
 ---
 
-## 📊 Données : mode démonstration
+## What makes the numbers trustworthy
 
-**Important : les chiffres affichés sont des données de démonstration générées, pas des données réelles.**
-
-Tout est centralisé dans `src/data/mockData.js` :
-
-- Chaque magasin a un **profil** (nombre moyen de clients, taux PEC, etc.) dans l'objet `profiles`
-- Les données sont générées de façon **déterministe** par combinaison magasin + date :
-  la même sélection redonne toujours les mêmes chiffres
-- Les variations "vs hier" sont réellement calculées en comparant avec les données générées de la veille
-- Les dates futures ne sont pas sélectionnables dans le calendrier
-
-### Brancher les données réelles
-
-Quand l'API de la pipeline sera disponible, remplacer dans `src/pages/Dashboard.jsx` :
-
-```js
-const data = useMemo(
-  () => getDashboardData(selectedStore, selectedDate),
-  [selectedStore, selectedDate]
-);
-```
-
-par un appel API qui retourne un objet de la même forme :
-
-```js
-// GET /api/dashboard?magasin=Tunisia%20Mall&date=2026-07-07
-{
-  kpis: [...],           // 5 cartes KPI
-  heureDePointe: [...],  // { h, clients } × 12
-  tauxParHeure: [...],   // { h, taux } × 12
-  evolutionHebdo: [...], // { jour, cette, derniere } × 6
-  heatmapData: [[...]]   // matrice 12 × 7 de valeurs 0 → 1
-}
-```
-
-Aucun autre fichier n'a besoin d'être modifié.
+- **The AI is never second-guessed.** The backend stores exactly what the Jetson decided — it doesn't filter, re-score, or "clean up" a detection.
+- **People are deduplicated correctly.** A tracker's ID is recycled within a day and across days; entries are keyed on `(track_id, local day)`, which fixed an **8.2% over-count** from re-detections and an **8.4% under-count** from ID recycling — see [DOCUMENT.md §5.2](DOCUMENT.md#52-deduplication-the-heart-of-the-count).
+- **A missing measurement is visible, not zero.** `null` renders as `—` everywhere — on the dashboard and in the AI-generated reports — so "nobody came in" is never confused with "the camera sent nothing."
+- **Simulated data announces itself.** Until a store's Joolan mapping is configured, sales figures are simulated and flagged with an orange banner and `simule: true` in the API — never silently presented as real.
+- **Anomalies are never capped away.** The hand-off rate can (and currently does, on one measured store) exceed 100% — a defect in the vision pipeline, not the aggregation. The dashboard shows it as-is instead of clamping the axis, because a hidden anomaly is a bug nobody ever finds.
 
 ---
 
-## 🛠️ Technologies
+## Documentation
 
-| Librairie | Usage |
+| Document | Content |
 |---|---|
-| [React 18](https://react.dev/) + [Vite](https://vitejs.dev/) | Framework et build |
-| [react-router-dom](https://reactrouter.com/) | Navigation entre les pages |
-| [Recharts](https://recharts.org/) | Tous les graphes |
-| [lucide-react](https://lucide.dev/) | Icônes |
-
-Le calendrier et la heatmap sont des composants custom sans dépendance supplémentaire.
+| [`DOCUMENT.md`](DOCUMENT.md) | **The complete course** — architecture, data model, deduplication logic, Joolan integration, deployment internals, security model, known limitations |
+| [`crk-backend/README.md`](crk-backend/README.md) | API endpoints, computation rules, timestamp handling |
+| [`crk-backend/JOOLAN_INTEGRATION.md`](crk-backend/JOOLAN_INTEGRATION.md) | State of the POS integration, what's left to confirm with CRK |
+| [`Dashboard/README.md`](Dashboard/README.md) | Pages, structure, customization |
+| [`WiseVision/README.md`](WiseVision/README.md) | The vision pipeline: detection, role classification, entry/interaction counting, camera onboarding |
+| [`deploy/windows/README.md`](deploy/windows/README.md) | Operations runbook — install, update, backup, troubleshooting |
+| [`swagger.yaml`](swagger.yaml) | Joolan POS API v2 specification |
 
 ---
 
-## 🎨 Personnalisation
+## Status
 
-- **Logo** : remplacer `src/assets/logo-crk.png` (même nom de fichier)
-- **Couleurs** : variables CSS en haut de `src/index.css` (`--crk-brick`, `--crk-cream`, ...)
-- **Magasins** : liste `storeNames` et profils dans `src/data/mockData.js`
+Actively used in production for CRK Maroquinier's Manar City store, with the remaining 7 stores pending camera rollout and POS store-code mapping. Known gaps and next steps — the hand-off-rate anomaly, POS field definitions still to confirm, missing automated tests — are tracked in [DOCUMENT.md §16](DOCUMENT.md#16-known-limitations-and-next-steps).
+
+This is a client project built for CRK Maroquinier; the code is shared here for portfolio and architecture-reference purposes.
