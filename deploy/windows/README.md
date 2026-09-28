@@ -3,9 +3,6 @@
 Un **seul service** sert le dashboard et l'API sur le même port. Pas de nginx,
 pas de CORS, aucune URL de backend à figer dans le frontend.
 
-> 📘 Pourquoi ce choix (et non nginx + uvicorn), et comment fonctionne chaque
-> pièce : [`../../DOCUMENT.md` §11-12](../../DOCUMENT.md#12-deployment-the-deploy-folder).
-
 ```
 VM:8000
  ├─ /            -> Dashboard/dist/index.html

@@ -6,9 +6,6 @@ sert au [dashboard](../Dashboard) des agrégats déjà calculés.
 
 FastAPI + SQLite (mode WAL). Trois dépendances, versions figées.
 
-> 📘 Explication détaillée de chaque décision de conception :
-> [`../DOCUMENT.md`](../DOCUMENT.md).
-
 ---
 
 ## Démarrer
@@ -121,8 +118,8 @@ Dates au format ISO `YYYY-MM-DD`. Magasin inconnu → 404, paramètre invalide �
 400 avec le motif. Une plage inversée est remise à l'endroit ; au-delà de 400
 jours elle est refusée.
 
-Structure complète des réponses :
-[`../DOCUMENT.md` §8](../DOCUMENT.md#8-full-reference-of-crk-endpoints).
+Structure complète des réponses : documentation interactive (`/docs`) ou
+code de [`analytics.py`](analytics.py).
 
 ### Dashboard statique
 
@@ -254,8 +251,10 @@ Une base au **schéma ancien** (colonnes `pec_id`, `duration_s`, `seller_count`,
 `zone_id`) reste lisible : le service le signale au démarrage mais ne migre
 jamais tout seul — une opération destructrice ne doit pas être un effet de bord.
 
-Pourquoi SQLite et pas PostgreSQL, et quand il faudra changer :
-[`../DOCUMENT.md` §4](../DOCUMENT.md#4-layer-3--the-database-yes-there-is-one).
+Pourquoi SQLite et pas PostgreSQL : un seul processus écrit, quelques milliers
+de lignes par jour — un serveur dédié n'apporterait rien tant que ça reste
+vrai (plusieurs écrivains, plusieurs machines, ou un volume qui ralentit
+vraiment les requêtes).
 
 ---
 
@@ -321,9 +320,7 @@ vérification que le service est arrêté.
 
 ## Configuration
 
-Toutes les variables sont documentées dans [`.env.example`](.env.example) et
-récapitulées dans
-[`../DOCUMENT.md` annexe A](../DOCUMENT.md#appendix-a--all-environment-variables).
+Toutes les variables sont documentées dans [`.env.example`](.env.example).
 
 Les essentielles :
 

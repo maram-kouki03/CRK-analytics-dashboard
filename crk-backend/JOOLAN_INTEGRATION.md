@@ -11,9 +11,6 @@ données de caisse. Il reste des **correspondances de magasins** et des
 - Découverte des champs réels : [`inspect_joolan.py`](inspect_joolan.py)
 - Spécification : [`../swagger.yaml`](../swagger.yaml) (Joolan API v2)
 
-> 📘 Le raisonnement complet derrière la conception du cache et de l'aiguillage :
-> [`../DOCUMENT.md` §6](../DOCUMENT.md#6-the-joolan-pos-api).
-
 ---
 
 ## 1. Ce qui est en place

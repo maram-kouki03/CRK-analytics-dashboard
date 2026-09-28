@@ -8,10 +8,6 @@ calcule et ne génère aucun chiffre lui-même.
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Recharts](https://img.shields.io/badge/Recharts-2-96402e)
 
-> 📘 Architecture détaillée, build et déploiement expliqués :
-> [`../DOCUMENT.md` §9](../DOCUMENT.md#9-layer-5--the-react-frontend) et
-> [§11](../DOCUMENT.md#11-the-build-what-dist-is-for).
-
 ---
 
 ## Lancer le projet
@@ -225,8 +221,7 @@ L'historique des rapports est conservé dans `localStorage` (clé `crk-rapports`
 
 > ⚠️ Le prompt système date d'avant le branchement de Joolan : il affirme encore
 > qu'« il n'y a AUCUNE donnée de caisse ». À mettre à jour maintenant que le CA
-> est réel — voir
-> [`../DOCUMENT.md` §16.3](../DOCUMENT.md#163-identified-technical-debt).
+> est réel.
 
 ---
 
